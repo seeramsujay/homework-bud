@@ -47,8 +47,8 @@ import glob
 import shutil
 import subprocess
 
-# Install high-performance neural vision OCR and imaging libraries
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "transformers", "sentencepiece", "accelerate", "easyocr", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
+# Install imaging and table libraries
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
 
 # Clone or pull latest project repository
 if not os.path.exists("line_segmenter.py"):

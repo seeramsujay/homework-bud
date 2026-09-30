@@ -111,7 +111,10 @@ def process_all_training_pages_to_lines(
     for ext in search_exts:
         image_paths.extend(glob.glob(os.path.join(training_images_dir, ext)))
         image_paths.extend(glob.glob(os.path.join(training_images_dir, "**", ext), recursive=True))
-    image_paths = sorted(list(set(image_paths)))
+    def sort_key(p):
+        name = os.path.splitext(os.path.basename(p))[0]
+        return (0, int(name)) if name.isdigit() else (1, name)
+    image_paths = sorted(list(set(image_paths)), key=sort_key)
     image_paths = [p for p in image_paths if "blank" not in os.path.basename(p).lower()]
 
     if not image_paths:
@@ -126,84 +129,16 @@ def process_all_training_pages_to_lines(
         print(f"  {os.path.basename(p)} -> {len(crops)} lines")
         all_crops.extend(crops)
 
-    print(f"\n[INFO] Cropped {len(all_crops)} line images. Running neural OCR on each crop...")
-
-    has_trocr = False
-    has_easyocr = False
-    trocr_processor = None
-    trocr_model = None
-    device = "cpu"
-
-    try:
-        import torch
-        from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-        from PIL import Image
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[INFO] Loading Microsoft TrOCR handwriting vision model on {device}...")
-        trocr_processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
-        trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten").to(device)
-        trocr_model.eval()
-        has_trocr = True
-        print("[OK] TrOCR handwriting vision model ready!")
-    except Exception as e:
-        print(f"[WARN] TrOCR not loaded ({e}), falling back to EasyOCR...")
-        try:
-            import easyocr
-            reader = easyocr.Reader(['en'], gpu=True)
-            has_easyocr = True
-        except Exception:
-            try:
-                import easyocr
-                reader = easyocr.Reader(['en'], gpu=False)
-                has_easyocr = True
-            except Exception:
-                import pytesseract
-                has_easyocr = False
+    print(f"\n[INFO] Cropped {len(all_crops)} line images.")
 
     csv_rows = []
-    valid_charset = set(drawing.alphabet)
-
     for item in all_crops:
-        crop_path = item['filepath']
-        ocr_text = ""
-
-        try:
-            if has_trocr:
-                from PIL import Image
-                import torch
-                pil_img = Image.open(crop_path).convert("RGB")
-                pixel_values = trocr_processor(pil_img, return_tensors="pt").pixel_values.to(device)
-                with torch.no_grad():
-                    generated_ids = trocr_model.generate(pixel_values, max_new_tokens=64)
-                ocr_text = trocr_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-            elif has_easyocr:
-                res = reader.readtext(crop_path, detail=0)
-                ocr_text = " ".join(res).strip()
-            else:
-                crop = cv2.imread(crop_path)
-                gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-                ocr_text = pytesseract.image_to_string(gray, config='--psm 7').strip()
-        except Exception:
-            ocr_text = ""
-
-        # Normalize quotes and filter to valid English characters
-        text = (
-            ocr_text.replace('“', '"')
-            .replace('”', '"')
-            .replace('‘', "'")
-            .replace('’', "'")
-            .replace('—', '-')
-            .replace('–', '-')
-        )
-        cleaned_ocr = "".join([c for c in text if c in valid_charset])
-        cleaned_ocr = " ".join(cleaned_ocr.split())
-
         csv_rows.append({
             'line_id': item['line_id'],
             'filename': item['filename'],
             'source_page': item['source_image'],
-            'ocr_transcription': cleaned_ocr,
-            'user_verified_transcription': cleaned_ocr
+            'ocr_transcription': '',
+            'user_verified_transcription': ''
         })
 
     # Write CSV
@@ -216,9 +151,9 @@ def process_all_training_pages_to_lines(
     import shutil
     zip_path = shutil.make_archive("segmented_lines", "zip", output_lines_dir)
 
-    print(f"\n[OK] Line segmentation & initial OCR complete!")
+    print(f"\n[OK] Line segmentation complete!")
     print(f"  Cropped images: {output_lines_dir}/")
     print(f"  Zipped archive: {zip_path}")
     print(f"  Review CSV: {csv_path}")
-    print(f"  Total lines ready for review: {len(csv_rows)}")
+    print(f"  Total lines cropped: {len(csv_rows)}")
     return csv_path
