@@ -1,16 +1,43 @@
 """
 Deep Learning Handwriting OCR and Dataset Builder for Homework-Bud
-Uses modern neural OCR (EasyOCR / TrOCR / PaddleOCR) on Kaggle GPU
+Uses modern neural OCR (EasyOCR English model) on Kaggle GPU
 to accurately transcribe cursive/fast handwriting from notebook photos
 and build training pairs (x.npy, c.npy) for fine-tuning.
+Strictly configured for English alphabet and ASCII characters.
 """
 
 import os
 import glob
+import string
 import cv2
 import numpy as np
 import drawing
 from paper_stroke_extractor import skeletonize, trace_skeleton_strokes
+
+
+# Standard English printable character set
+ENGLISH_CHARSET = set(drawing.alphabet)
+
+
+def clean_english_text(raw_text: str) -> str:
+    """
+    Sanitizes raw OCR text to strictly keep valid English characters,
+    digits, and punctuation supported by the handwriting synthesis model.
+    """
+    # Replace non-standard unicode quotes/dashes
+    text = (
+        raw_text.replace('“', '"')
+        .replace('”', '"')
+        .replace('‘', "'")
+        .replace('’', "'")
+        .replace('—', '-')
+        .replace('–', '-')
+    )
+    # Strictly filter to English alphabet
+    cleaned = ''.join([ch for ch in text if ch in ENGLISH_CHARSET])
+    # Collapse multiple spaces
+    cleaned = ' '.join(cleaned.split())
+    return cleaned
 
 
 class HandwritingDatasetBuilder:
@@ -19,16 +46,16 @@ class HandwritingDatasetBuilder:
         self.reader = None
 
     def load_neural_ocr(self):
-        """Initializes EasyOCR / neural recognizer with English handwriting support."""
+        """Initializes EasyOCR neural recognizer strictly for English."""
         if self.reader is None:
             import easyocr
-            print("[INFO] Initializing Neural OCR Reader on GPU...")
+            print("[INFO] Initializing Neural OCR Reader on GPU (English only)...")
             self.reader = easyocr.Reader(['en'], gpu=self.use_gpu)
-            print("[OK] Neural OCR loaded.")
+            print("[OK] English Neural OCR loaded.")
 
     def transcribe_page_lines(self, image_path: str):
         """
-        Extracts individual lines of text, crops them, and runs deep OCR.
+        Extracts individual lines of English text, crops them, and runs neural OCR.
         Returns a list of dicts: [{'crop': img, 'bbox': (x,y,w,h), 'text': '...'}]
         """
         self.load_neural_ocr()
@@ -36,14 +63,14 @@ class HandwritingDatasetBuilder:
         if img is None:
             raise FileNotFoundError(f"Could not load {image_path}")
 
-        # EasyOCR detects and transcribes word/line bounding boxes in reading order
+        # English paragraph recognition
         results = self.reader.readtext(img, paragraph=True, detail=1)
 
         extracted_lines = []
         for bbox, text in results:
-            clean_text = text.strip()
-            # Filter low-confidence or tiny noise
-            if len(clean_text) < 2:
+            clean_text = clean_english_text(text)
+            # Must have at least 3 valid English characters
+            if len(clean_text) < 3:
                 continue
 
             pts = np.array(bbox, dtype=np.int32)
@@ -65,7 +92,7 @@ class HandwritingDatasetBuilder:
                 'text': clean_text
             })
 
-        print(f"[OK] Neural OCR extracted {len(extracted_lines)} lines from {os.path.basename(image_path)}")
+        print(f"[OK] Neural OCR extracted {len(extracted_lines)} English lines from {os.path.basename(image_path)}")
         return extracted_lines
 
     def build_dataset_from_images(
@@ -74,13 +101,11 @@ class HandwritingDatasetBuilder:
         output_dir: str = "data/processed"
     ):
         """
-        Extracts stroke sequences and paired OCR transcriptions from all training images,
+        Extracts stroke sequences and paired English OCR transcriptions from all training images,
         and saves x.npy, x_len.npy, c.npy, c_len.npy ready for rnn.py fine-tuning.
         """
         all_strokes = []
         all_transcriptions = []
-
-        valid_charset = set(drawing.alphabet)
 
         for img_path in image_paths:
             print(f"\n[PROCESSING] {img_path}...")
@@ -88,14 +113,11 @@ class HandwritingDatasetBuilder:
 
             for line_data in lines:
                 crop = line_data['crop']
-                raw_text = line_data['text']
+                clean_text = line_data['text']
 
-                # Sanitize text
-                clean_text = ''.join([ch for ch in raw_text if ch in valid_charset])
                 if len(clean_text) < 3:
                     continue
 
-                # Extract strokes from crop
                 # Filter blue ink
                 hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
                 blue_mask = (hsv[:, :, 0] >= 85) & (hsv[:, :, 0] <= 140) & (hsv[:, :, 1] >= 40)
@@ -127,9 +149,9 @@ class HandwritingDatasetBuilder:
                 all_transcriptions.append(clean_text[:drawing.MAX_CHAR_LEN])
 
         if not all_strokes:
-            raise ValueError("No valid line pairs extracted. Check image quality.")
+            raise ValueError("No valid English line pairs extracted. Check image quality.")
 
-        print(f"\n[DONE] Successfully processed {len(all_strokes)} training pairs!")
+        print(f"\n[DONE] Successfully processed {len(all_strokes)} English training pairs!")
 
         # Format arrays for Graves RNN
         num_samples = len(all_strokes)
