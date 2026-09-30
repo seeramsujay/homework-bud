@@ -45,14 +45,15 @@ import os
 import sys
 import glob
 import shutil
+import subprocess
 
 # Install high-performance neural OCR and imaging libraries
-!pip install --quiet easyocr opencv-python-headless pillow pandas matplotlib
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "easyocr", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
 
 # Clone project repository if helper files are not present
 if not os.path.exists("line_segmenter.py"):
-    !git clone --depth 1 https://github.com/seeramsujay/homework-bud.git repo_code
-    !cp -rn repo_code/* . 2>/dev/null || true
+    os.system("git clone --depth 1 https://github.com/seeramsujay/homework-bud.git repo_code")
+    os.system("cp -rn repo_code/* . 2>/dev/null || true")
 
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
@@ -137,7 +138,8 @@ for i, (_, row) in enumerate(sample_df.iterrows()):
         img = Image.open(img_path)
         plt.subplot(sample_count, 1, i + 1)
         plt.imshow(img)
-        plt.title(f"[{row['filename']}] OCR: \"{row['ocr_transcription']}\"", fontsize=10, loc='left')
+        title_text = f"[{row['filename']}] OCR: " + str(row['ocr_transcription'])
+        plt.title(title_text, fontsize=10, loc='left')
         plt.axis("off")
 plt.tight_layout()
 plt.show()
@@ -155,7 +157,7 @@ for f in ["lines_transcription.csv", "segmented_lines.zip"]:
         size_mb = os.path.getsize(f) / (1024 * 1024)
         print(f"  ✓ {f:<26} ({size_mb:.2f} MB)")
 
-print("\nInstructions:")
+print("\\nInstructions:")
 print("1. Download 'lines_transcription.csv' and 'segmented_lines.zip' from Kaggle Output.")
 print("2. Open 'lines_transcription.csv' to review and verify the 'user_verified_transcription' column.")
 print("3. When verified, upload the CSV back for Stage 2 (RNN Fine-Tuning & Homework Synthesis)!")
