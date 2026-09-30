@@ -5,3 +5,11 @@ data/processed
 
 logs
 predictions
+__pycache__/
+*.pyc
+.venv/
+output/
+output_homework/
+test_blank_ruled.jpg
+test_homework.pdf
+test_rendered_homework.jpg
