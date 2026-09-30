@@ -34,8 +34,8 @@ class HomeworkEngine:
     def load_model(self):
         """Loads and initializes the Graves RNN model from checkpoints."""
         if self.hand is None:
-            print("[INFO] Initializing Handwriting Synthesis RNN...")
-            self.hand = Hand()
+            print(f"[INFO] Initializing Handwriting Synthesis RNN from {self.checkpoint_dir}...")
+            self.hand = Hand(checkpoint_dir=self.checkpoint_dir)
             print("[OK] Model restored successfully from checkpoint.")
 
     def wrap_text_for_ruled_page(self, raw_text: str, max_chars_per_line: int = 60) -> List[str]:

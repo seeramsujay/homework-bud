@@ -15,11 +15,15 @@ from paper_stroke_extractor import skeletonize, trace_skeleton_strokes
 def build_dataset_from_verified_csv(
     csv_path: str = "lines_transcription.csv",
     lines_dir: str = "segmented_lines",
-    output_dir: str = "data/processed"
+    output_dir: str = "data/processed",
+    current_page: str = "7.jpeg",
+    current_page_multiplier: int = 12,
+    style_output_prefix: str = "styles/style-user-current"
 ):
     """
     Reads the user-reviewed CSV and corresponding line PNGs,
-    extracts sequential strokes (dx, dy, eos), and saves x.npy, c.npy for fine-tuning.
+    extracts sequential strokes (dx, dy, eos), heavily weights current page 7.jpeg,
+    saves x.npy, c.npy, and exports user current style for priming.
     """
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"Review CSV not found: {csv_path}")
@@ -30,7 +34,6 @@ def build_dataset_from_verified_csv(
     with open(csv_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Use user_verified_transcription if filled, else fallback to ocr_transcription
             text = row.get('user_verified_transcription', '').strip()
             if not text:
                 text = row.get('ocr_transcription', '').strip()
@@ -39,14 +42,15 @@ def build_dataset_from_verified_csv(
             clean_text = " ".join(clean_text.split())
 
             if len(clean_text) >= 3:
-                rows.append((row['filename'], clean_text))
+                rows.append((row['filename'], clean_text, row.get('source_page', '')))
 
     print(f"[INFO] Found {len(rows)} verified line entries in CSV.")
 
     all_strokes = []
     all_transcriptions = []
+    current_style_saved = False
 
-    for filename, text in rows:
+    for filename, text, source_page in rows:
         img_path = os.path.join(lines_dir, filename)
         if not os.path.exists(img_path):
             continue
@@ -55,10 +59,12 @@ def build_dataset_from_verified_csv(
         if crop is None:
             continue
 
-        # Mask royal blue ink
+        # Mask royal blue ink & dark pen strokes
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        blue_mask = (hsv[:, :, 0] >= 85) & (hsv[:, :, 0] <= 140) & (hsv[:, :, 1] >= 40)
-        ink_bin = (blue_mask * 255).astype(np.uint8)
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        blue_mask = (hsv[:, :, 0] >= 80) & (hsv[:, :, 0] <= 145) & (hsv[:, :, 1] >= 35)
+        dark_mask = (gray < 125)
+        ink_bin = ((blue_mask | dark_mask) * 255).astype(np.uint8)
 
         if cv2.countNonZero(ink_bin) < 40:
             continue
@@ -82,13 +88,24 @@ def build_dataset_from_verified_csv(
         offsets = offsets[:drawing.MAX_STROKE_LEN]
         offsets = drawing.normalize(offsets)
 
-        all_strokes.append(offsets)
-        all_transcriptions.append(text[:drawing.MAX_CHAR_LEN])
+        # Save style priming reference from current handwriting (e.g. line 143 or 148)
+        if source_page == current_page and not current_style_saved and len(text) >= 15:
+            os.makedirs(os.path.dirname(style_output_prefix), exist_ok=True)
+            np.save(f"{style_output_prefix}-strokes.npy", offsets)
+            np.save(f"{style_output_prefix}-chars.npy", np.array(text))
+            current_style_saved = True
+            print(f"[OK] Saved primary user style conditioning from {filename} ('{text}')")
+
+        # Prioritize current page by oversampling
+        repeat_count = current_page_multiplier if (source_page == current_page) else 1
+        for _ in range(repeat_count):
+            all_strokes.append(offsets)
+            all_transcriptions.append(text[:drawing.MAX_CHAR_LEN])
 
     if not all_strokes:
         raise ValueError("Could not extract valid strokes from line crops.")
 
-    print(f"[OK] Successfully built {len(all_strokes)} training pairs from verified lines!")
+    print(f"[OK] Built {len(all_strokes)} training pairs (current page '{current_page}' weighted {current_page_multiplier}x)!")
 
     num_samples = len(all_strokes)
     x = np.zeros([num_samples, drawing.MAX_STROKE_LEN, 3], dtype=np.float32)

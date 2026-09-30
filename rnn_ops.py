@@ -1,3 +1,4 @@
+import tensorflow.compat.v1 as tf
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
@@ -6,8 +7,42 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variable_scope as vs
-from tensorflow.python.ops.rnn_cell_impl import _concat, _like_rnncell
-from tensorflow.python.ops.rnn import _maybe_tensor_shape_from_tensor
+def _like_rnncell(cell):
+    return (hasattr(cell, "state_size") and 
+            hasattr(cell, "output_size") and 
+            callable(cell))
+
+
+def _concat(prefix, suffix, static=False):
+    if tf.is_tensor(prefix):
+        p = prefix
+    else:
+        p = constant_op.constant([prefix], dtype=dtypes.int32)
+    
+    if isinstance(suffix, tensor_shape.TensorShape):
+        s = constant_op.constant(suffix.as_list(), dtype=dtypes.int32)
+    elif isinstance(suffix, (list, tuple)):
+        s = constant_op.constant(list(suffix), dtype=dtypes.int32)
+    elif tf.is_tensor(suffix):
+        s = array_ops.reshape(suffix, [-1])
+    else:
+        s = constant_op.constant([suffix], dtype=dtypes.int32)
+        
+    p = array_ops.reshape(p, [1])
+    return array_ops.concat([p, s], axis=0)
+
+
+try:
+    from tensorflow.python.ops.rnn import _maybe_tensor_shape_from_tensor
+except (ImportError, AttributeError):
+    def _maybe_tensor_shape_from_tensor(shape):
+        if tf.is_tensor(shape):
+            return tensor_shape.TensorShape(None)
+        elif isinstance(shape, tensor_shape.TensorShape):
+            return shape
+        else:
+            return tensor_shape.as_shape(shape)
+
 from tensorflow.python.util import nest
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.eager import context
@@ -37,7 +72,8 @@ def raw_rnn(cell, loop_fn, parallel_iterations=None, swap_memory=False, scope=No
     # determined by the parent scope, or is set to place the cached
     # Variable using the same placement as for the rest of the RNN.
     with vs.variable_scope(scope or "rnn") as varscope:
-        if context.in_graph_mode():
+        in_graph = not tf.executing_eagerly() if hasattr(tf, 'executing_eagerly') else True
+        if in_graph:
             if varscope.caching_device is None:
                 varscope.set_caching_device(lambda op: op.device)
 
@@ -158,7 +194,7 @@ def raw_rnn(cell, loop_fn, parallel_iterations=None, swap_memory=False, scope=No
             return (next_time, elements_finished, next_input, state_ta,
                     emit_ta, next_state, loop_state)
 
-        returned = control_flow_ops.while_loop(
+        returned = tf.while_loop(
             condition, body, loop_vars=[
                 time, elements_finished, next_input, state_ta,
                 emit_ta, state, loop_state],
@@ -195,7 +231,7 @@ def rnn_teacher_force(inputs, cell, sequence_length, initial_state, scope='dynam
         elements_finished = time >= sequence_length
         finished = math_ops.reduce_all(elements_finished)
 
-        next_input = control_flow_ops.cond(
+        next_input = tf.cond(
             finished,
             lambda: array_ops.zeros([array_ops.shape(inputs)[1], inputs.shape.as_list()[2]], dtype=dtypes.float32),
             lambda: inputs_ta.read(time)
@@ -233,11 +269,12 @@ def rnn_free_run(cell, initial_state, sequence_length, initial_input=None, scope
         )
         finished = math_ops.reduce_all(elements_finished)
 
-        next_input = control_flow_ops.cond(
+        next_input = tf.cond(
             finished,
             lambda: array_ops.zeros_like(initial_input),
             lambda: initial_input if cell_output is None else cell.output_function(next_cell_state)
         )
+        next_input.set_shape([None, 3])
         emit_output = next_input[0] if cell_output is None else next_input
 
         next_loop_state = None

@@ -1,8 +1,21 @@
 import copy
 
 import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
+try:
+    from sklearn.model_selection import train_test_split
+except ImportError:
+    def train_test_split(indices, train_size=0.8, random_state=None, stratify=None):
+        if random_state is not None:
+            rng = np.random.RandomState(random_state)
+        else:
+            rng = np.random
+        shuffled = np.copy(indices)
+        rng.shuffle(shuffled)
+        if isinstance(train_size, float):
+            split_point = int(len(indices) * train_size)
+        else:
+            split_point = int(train_size)
+        return shuffled[:split_point], shuffled[split_point:]
 
 
 class DataFrame(object):

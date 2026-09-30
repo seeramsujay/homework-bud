@@ -11,11 +11,11 @@ from rnn import rnn
 
 class Hand(object):
 
-    def __init__(self):
+    def __init__(self, checkpoint_dir='checkpoints', restore_step=None):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
         self.nn = rnn(
             log_dir='logs',
-            checkpoint_dir='checkpoints',
+            checkpoint_dir=checkpoint_dir,
             prediction_dir='predictions',
             learning_rates=[.0001, .00005, .00002],
             batch_sizes=[32, 64, 64],
@@ -36,7 +36,7 @@ class Hand(object):
             output_mixture_components=20,
             attention_mixture_components=10
         )
-        self.nn.restore()
+        self.nn.restore(step=restore_step)
 
     def write(self, filename, lines, biases=None, styles=None, stroke_colors=None, stroke_widths=None):
         valid_char_set = set(drawing.alphabet)

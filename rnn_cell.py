@@ -175,7 +175,9 @@ class LSTMAttentionCell:
 
         idx = tf.stack([tf.range(self.batch_size), tf.cast(sampled_idx, tf.int32)], axis=1)
         coords = tf.gather_nd(sampled_coords, idx)
-        return tf.concat([coords, sampled_e], axis=1)
+        res = tf.concat([coords, sampled_e], axis=1)
+        res.set_shape([None, 3])
+        return res
 
     def termination_condition(self, state):
         char_idx = tf.cast(tf.argmax(state.phi, axis=1), tf.int32)
@@ -183,7 +185,7 @@ class LSTMAttentionCell:
         past_final_char = char_idx >= self.attention_values_lengths
         output = self.output_function(state)
         es = tf.cast(output[:, 2], tf.int32)
-        is_eos = tf.equal(es, np.ones_like(es))
+        is_eos = tf.equal(es, tf.ones_like(es))
         return tf.logical_or(tf.logical_and(final_char, is_eos), past_final_char)
 
     def _parse_parameters(self, gmm_params, eps=1e-8, sigma_eps=1e-4):

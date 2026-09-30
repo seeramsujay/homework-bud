@@ -1,0 +1,61 @@
+[{"stream_name":"stderr","time":6.232284569,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.23234801,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.232355551,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.232360117,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":6.819228824,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":6.819265033,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":6.819270729,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":6.819274822,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":11.937314107,"data":"Cloning into 'repo_code'...\n"}
+,{"stream_name":"stderr","time":12.140512647,"data":"Cloning into 'repo_code'...\n"}
+,{"stream_name":"stderr","time":12.140549693,"data":"\n"}
+,{"stream_name":"stderr","time":12.140556183,"data":"Cloning into 'repo_code'...\n"}
+,{"stream_name":"stdout","time":19.269835804,"data":"CUDA Available: True\n"}
+,{"stream_name":"stdout","time":19.269923172,"data":"Device: Tesla T4\n"}
+,{"stream_name":"stdout","time":19.269928912,"data":"Environment initialized successfully!\n"}
+,{"stream_name":"stdout","time":19.29368278,"data":"[OK] Found 6 training pages in: /kaggle/input/homework-bud-data/Training_Images\n"}
+,{"stream_name":"stdout","time":19.293723831,"data":"  - 1.jpeg\n"}
+,{"stream_name":"stdout","time":19.29372882,"data":"  - 2.jpeg\n"}
+,{"stream_name":"stdout","time":19.293732118,"data":"  - 3.jpeg\n"}
+,{"stream_name":"stdout","time":19.293735434,"data":"  - 4.jpeg\n"}
+,{"stream_name":"stdout","time":19.293738579,"data":"  - 5.jpeg\n"}
+,{"stream_name":"stdout","time":19.293741661,"data":"  - 6.jpeg\n"}
+,{"stream_name":"stdout","time":20.939462405,"data":"[INFO] Segmenting 6 pages into line crops...\n"}
+,{"stream_name":"stdout","time":20.939503357,"data":"  1.jpeg -\u003e 25 lines\n"}
+,{"stream_name":"stdout","time":21.203629164,"data":"  2.jpeg -\u003e 15 lines\n"}
+,{"stream_name":"stdout","time":21.203661718,"data":"  3.jpeg -\u003e 17 lines\n"}
+,{"stream_name":"stdout","time":21.203667872,"data":"  4.jpeg -\u003e 22 lines\n"}
+,{"stream_name":"stdout","time":21.550876378,"data":"  5.jpeg -\u003e 31 lines\n"}
+,{"stream_name":"stdout","time":21.550904295,"data":"  6.jpeg -\u003e 32 lines\n"}
+,{"stream_name":"stdout","time":21.550909969,"data":"\n"}
+,{"stream_name":"stdout","time":21.550914827,"data":"[INFO] Cropped 142 line images.\n"}
+,{"stream_name":"stdout","time":21.803399662,"data":"\n"}
+,{"stream_name":"stdout","time":21.803433032,"data":"[OK] Line segmentation complete!\n"}
+,{"stream_name":"stdout","time":21.803438759,"data":"  Cropped images: segmented_lines/\n"}
+,{"stream_name":"stdout","time":21.803443194,"data":"  Zipped archive: /kaggle/working/segmented_lines.zip\n"}
+,{"stream_name":"stdout","time":21.803447511999998,"data":"  Review CSV: lines_transcription.csv\n"}
+,{"stream_name":"stdout","time":21.803451858,"data":"  Total lines cropped: 142\n"}
+,{"stream_name":"stdout","time":22.611696436,"data":"Extracted 142 lines from 6 training pages!\n"}
+,{"stream_name":"stdout","time":22.61172787,"data":"Columns: ['line_id', 'filename', 'source_page', 'ocr_transcription', 'user_verified_transcription']\n"}
+,{"stream_name":"stdout","time":23.710962449,"data":"============================================================\n"}
+,{"stream_name":"stdout","time":23.710992749,"data":"STAGE 1 ARTIFACTS READY FOR DOWNLOAD:\n"}
+,{"stream_name":"stdout","time":23.710997419,"data":"============================================================\n"}
+,{"stream_name":"stdout","time":23.711001342,"data":"  ✓ lines_transcription.csv    (0.00 MB)\n"}
+,{"stream_name":"stdout","time":23.711005972,"data":"  ✓ segmented_lines.zip        (8.12 MB)\n"}
+,{"stream_name":"stdout","time":23.711009421,"data":"\n"}
+,{"stream_name":"stdout","time":23.711013204,"data":"Instructions:\n"}
+,{"stream_name":"stdout","time":23.711016675,"data":"1. Download 'lines_transcription.csv' and 'segmented_lines.zip' from Kaggle Output.\n"}
+,{"stream_name":"stdout","time":23.711020472,"data":"2. Open 'lines_transcription.csv' to review and verify the 'user_verified_transcription' column.\n"}
+,{"stream_name":"stdout","time":23.711024112,"data":"3. When verified, upload the CSV back for Stage 2 (RNN Fine-Tuning \u0026 Homework Synthesis)!\n"}
+,{"stream_name":"stdout","time":23.711028576,"data":"============================================================\n"}
+,{"stream_name":"stderr","time":28.701686257,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":28.701724054,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":28.855927881,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":28.855960686,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":29.457321114,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":29.795792217,"data":"[NbConvertApp] Writing 1654928 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":32.283639731,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":33.163391899,"data":"[NbConvertApp] Support files will be in __results___files/\n"}
+,{"stream_name":"stderr","time":33.163434523,"data":"[NbConvertApp] Making directory __results___files\n"}
+,{"stream_name":"stderr","time":33.164412979,"data":"[NbConvertApp] Writing 304604 bytes to __results__.html\n"}
+]

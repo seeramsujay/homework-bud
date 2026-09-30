@@ -7,7 +7,8 @@ import pprint as pp
 import time
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 from tf_utils import shape
 
@@ -377,7 +378,7 @@ class TFBaseModel(object):
         logging.info(pp.pformat([(var.name, shape(var)) for var in tf.trainable_variables()]))
 
         logging.info('trainable parameter count:')
-        logging.info(str(np.sum(np.prod(shape(var)) for var in tf.trainable_variables())))
+        logging.info(str(sum(int(np.prod(shape(var))) for var in tf.trainable_variables())))
 
     def get_optimizer(self, learning_rate, beta1_decay):
         if self.optimizer == 'adam':
