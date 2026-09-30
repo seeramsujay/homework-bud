@@ -25,21 +25,20 @@ def create_notebook():
 
     # Header
     add_md("""
-# 📝 Homework-Bud: Automated Neural OCR, Fine-Tuning & Ruled Paper Synthesis
-### Fine-tunes Alex Graves' Handwriting RNN on your actual handwritten notebook notes using Deep Learning OCR on Kaggle GPU, aligns onto your blank ruled sheet photo, and renders crisp Royal Blue ink scans.
+# 📝 Homework-Bud: Automated Line Segmentation, OCR Review & Fine-Tuning
+### Slices notebook pages into numbered line PNGs, generates a review CSV with OCR transcriptions on Kaggle, fine-tunes on your verified handwriting, and synthesizes ruled homework pages in Royal Blue ink.
 
 ---
-### 🚀 End-to-End Pipeline:
-1. **Clone Repository & Checkpoints**: Automatically clones `seeramsujay/homework-bud` with all model checkpoints, detector code, and styles.
-2. **Deep Learning OCR (EasyOCR / English Model)**: Automatically detects lines and transcribes cursive handwriting from your `Training_Images/`.
-3. **Fine-Tuning on Kaggle GPU**: Runs gradient descent from `model-17900` on your handwriting pairs $(x, c)$ to adapt the neural weights to your exact letter shapes and flow.
-4. **Ruled Sheet Detection**: Detects notebook lines and margins on `Blank_Page.jpeg`.
-5. **Snapping & Synthesis**: Synthesizes homework text snapped to ruled lines with user-tunable neatness bias.
-6. **High-Contrast Scan Overlay**: Solid Royal Blue ink (`#3057a3`) Multiply-blended with high scanner gamma/contrast, compiled to multi-page PDF.
+### 🌟 Workflow:
+1. **Segment Pages into Lines**: Crops each handwritten line into `segmented_lines/line_XXXX.png`.
+2. **Neural OCR & CSV Export**: Runs OCR on each cropped line and saves `lines_transcription.csv` for easy review.
+3. **Fine-Tuning on Kaggle GPU**: Trains on line pairs to adapt Alex Graves' RNN weights to your personal handwriting style.
+4. **Ruled Sheet Detection & Alignment**: Snaps synthesized handwriting onto `Blank_Page.jpeg`.
+5. **High-Contrast Scan Export**: Renders Royal Blue ink (`#3057a3`) with document-scanner contrast into a multi-page PDF.
     """)
 
-    # Cell 1: Setup & Dependencies
-    add_md("## 1. Setup Environment & Clone Repository")
+    # Cell 1: Setup
+    add_md("## 1. Setup & Environment")
     add_code("""
 import os
 import sys
@@ -47,106 +46,119 @@ import sys
 # Clone project repository if running in a fresh Kaggle container
 if not os.path.exists("checkpoints"):
     !git clone --depth 1 https://github.com/seeramsujay/homework-bud.git repo_code
-    # Move repo files into working directory
     !cp -rn repo_code/* .
     !cp -rn repo_code/.* . 2>/dev/null || true
 
-# Add current directory to python path
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
 
-# Install runtime dependencies
+# Install required dependencies
 !pip install --quiet easyocr svgwrite opencv-python-headless pillow reportlab scipy matplotlib
 
 import glob
 import cv2
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
-print("GPU environment initialized and repository code loaded!")
+print("Kaggle GPU environment initialized!")
     """)
 
-    # Cell 2: Import Modules
+    # Cell 2: Imports
     add_md("## 2. Load Pipeline Modules")
     add_code("""
+from line_segmenter import process_all_training_pages_to_lines
+from build_dataset_verified import build_dataset_from_verified_csv
 from ruled_sheet_detector import RuledSheetDetector
 from scan_renderer import ScanRenderer
 from homework_engine import HomeworkEngine
-from build_dataset_ocr import HandwritingDatasetBuilder
 from finetune_user import finetune_user_handwriting
 
-print("Pipeline modules loaded successfully!")
+print("All pipeline modules loaded successfully!")
     """)
 
-    # Cell 3: Neural OCR & Dataset Creation
+    # Cell 3: Segment Pages into Numbered Line Crops + Run OCR to CSV
     add_md("""
-## 3. Step 1: Deep Learning OCR on Your Handwritten Pages
-Automatically reads and crops lines from `Training_Images/` and pairs pen strokes with text.
+## 3. Step 1: Crop Lines & Generate Review CSV (`lines_transcription.csv`)
+Automatically detects line boundaries across all uploaded pages in `Training_Images/`,
+saves individual numbered crops (`segmented_lines/line_0001.png`, ...),
+runs neural OCR on each line, and writes `lines_transcription.csv`.
     """)
     add_code("""
-# Locate training images from input or working directory
-train_images = sorted(glob.glob("Training_Images/*.jpeg") + glob.glob("Training_Images/*.jpg") + glob.glob("/kaggle/input/**/*.jpeg") + glob.glob("/kaggle/input/**/*.jpg"))
-# Exclude blank page from training
-train_images = [p for p in train_images if "blank" not in os.path.basename(p).lower()]
+# Locate training pages
+train_dir = "Training_Images" if os.path.exists("Training_Images") else "/kaggle/input"
+output_lines_dir = "segmented_lines"
+csv_path = "lines_transcription.csv"
 
-print(f"Found {len(train_images)} training pages.")
+# Run line segmentation and line-level OCR
+process_all_training_pages_to_lines(
+    training_images_dir=train_dir,
+    output_lines_dir=output_lines_dir,
+    csv_path=csv_path
+)
 
-if train_images:
-    # Initialize Neural OCR on GPU
-    builder = HandwritingDatasetBuilder(use_gpu=True)
-    builder.build_dataset_from_images(train_images, output_dir="data/processed")
-else:
-    print("Notice: No training images found in Training_Images/ or /kaggle/input/. Using extracted user style directly.")
+# Display first 15 entries for quick review
+df = pd.read_csv(csv_path)
+print(f"\\nGenerated CSV with {len(df)} lines! First 15 lines:")
+display(df.head(15))
     """)
 
-    # Cell 4: Fine-Tuning the RNN
+    # Cell 4: Preview Sample Line Crops
+    add_md("## 4. Step 2: Visual Inspection of Cropped Lines")
+    add_code("""
+df = pd.read_csv("lines_transcription.csv")
+sample_rows = df.head(6)
+
+plt.figure(figsize=(14, 8))
+for i, (_, row) in enumerate(sample_rows.iterrows()):
+    img_p = os.path.join("segmented_lines", row['filename'])
+    if os.path.exists(img_p):
+        img = Image.open(img_p)
+        plt.subplot(6, 1, i + 1)
+        plt.imshow(img)
+        plt.title(f"[{row['filename']}] OCR: \"{row['ocr_transcription']}\"", fontsize=10, loc='left')
+        plt.axis("off")
+plt.tight_layout()
+plt.show()
+    """)
+
+    # Cell 5: Build Training Pairs from CSV & Fine-Tune
     add_md("""
-## 4. Step 2: Fine-Tune the Handwriting RNN on Kaggle GPU
-Adapts the model weights directly to your personal handwriting style.
+## 5. Step 3: Build Dataset & Fine-Tune RNN on Kaggle GPU
+Extracts stroke coordinates paired with verified text from the CSV and fine-tunes `model-17900`.
+*(Tip: If you edited any text in `lines_transcription.csv`, it will automatically use your corrections!)*
     """)
     add_code("""
-if os.path.exists("data/processed/x.npy"):
-    print("Starting fine-tuning with extracted dataset...")
-    finetune_user_handwriting(
-        data_dir="data/processed/",
-        checkpoint_dir="checkpoints",
-        warm_start_step=17900,
-        finetune_steps=2000,
-        learning_rate=0.00005,
-        batch_size=16
-    )
-else:
-    print("No paired dataset generated; running with pretrained weights and user style conditioning.")
+# Build paired dataset (x.npy, c.npy)
+build_dataset_from_verified_csv(
+    csv_path="lines_transcription.csv",
+    lines_dir="segmented_lines",
+    output_dir="data/processed"
+)
+
+# Run fine-tuning on Kaggle GPU
+finetune_user_handwriting(
+    data_dir="data/processed/",
+    checkpoint_dir="checkpoints",
+    warm_start_step=17900,
+    finetune_steps=2000,
+    learning_rate=0.00005,
+    batch_size=16
+)
     """)
 
-    # Cell 5: Analyze Blank Ruled Page
-    add_md("## 5. Step 3: Analyze Blank Ruled Notebook Sheet")
+    # Cell 6: Analyze Blank Ruled Page
+    add_md("## 6. Step 4: Analyze Blank Ruled Notebook Sheet")
     add_code("""
-blank_candidates = glob.glob("*blank*.jpeg") + glob.glob("*Blank*.jpeg") + glob.glob("*blank*.jpg") + glob.glob("/kaggle/input/**/*blank*.jpeg")
-if blank_candidates:
-    blank_sheet = blank_candidates[0]
-else:
-    # Fallback to simulated ruled paper
-    blank_sheet = "simulated_ruled.jpg"
-    w, h = 1200, 1600
-    y_coords, x_coords = np.mgrid[0:h, 0:w]
-    gradient = 250 - 25 * (x_coords / w + y_coords / h) / 2.0
-    paper = np.stack([gradient, gradient + 2, gradient + 4], axis=-1).astype(np.uint8)
-    noise = np.random.normal(0, 3, (h, w, 3))
-    paper = np.clip(paper + noise, 0, 255).astype(np.uint8)
-    for y in range(150, h - 100, 52):
-        cv2.line(paper, (60, y), (w - 60, y), (210, 190, 170), 1)
-    cv2.line(paper, (160, 80), (160, h - 60), (160, 150, 230), 2)
-    cv2.imwrite(blank_sheet, paper)
+blank_candidates = glob.glob("*blank*.jpeg") + glob.glob("*Blank*.jpeg") + glob.glob("/kaggle/input/**/*blank*.jpeg")
+blank_sheet = blank_candidates[0] if blank_candidates else "Blank_Page.jpeg"
 
-print(f"Using blank sheet: {blank_sheet}")
 detector = RuledSheetDetector()
 layout = detector.analyze_image(blank_sheet)
-
 print(f"Detected {len(layout.baselines)} ruled lines.")
 print(f"Line spacing: {layout.line_spacing:.1f}px | Left margin: {layout.left_margin:.1f}px | Tilt: {layout.tilt_angle_deg:.2f}°")
 
@@ -158,15 +170,15 @@ cv2.line(preview, (int(layout.left_margin), 0), (int(layout.left_margin), layout
 
 plt.figure(figsize=(8, 11))
 plt.imshow(cv2.cvtColor(preview, cv2.COLOR_BGR2RGB))
-plt.title("Detected Ruled Lines (Green) and Left Margin (Blue)")
+plt.title("Detected Ruled Notebook Lines (Green) and Margin (Blue)")
 plt.axis("off")
 plt.show()
     """)
 
-    # Cell 6: Homework Text & Synthesis
-    add_md("## 6. Step 4: Generate Your Homework in Royal Blue Ink")
+    # Cell 7: Synthesize Homework on Ruled Sheet
+    add_md("## 7. Step 5: Synthesize Homework in Royal Blue Ink")
     add_code("""
-# Exact Royal Blue ink (#3057a3)
+# Royal Blue ink extracted from your pen (#3057a3)
 ROYAL_BLUE = (48, 87, 163)
 
 # Neatness bias (0.85 = neat, uniform handwriting)
@@ -182,11 +194,8 @@ The attention mechanism acts as a soft window that slides across the character s
 Instead of predicting deterministic coordinates, the mixture density network outputs the means, variances, correlations, and mixture weights of a bivariate Gaussian mixture model, along with a Bernoulli end-of-stroke probability.
 
 3. Output Rendering:
-The synthesized strokes are aligned directly with the detected ruled baselines and rendered in solid royal blue ink.
+The synthesized strokes are aligned directly with the detected ruled baselines and rendered in solid royal blue ink with scanner contrast.
 \"\"\"
-
-# Check for custom style prefix
-custom_prefix = "styles/style-user" if os.path.exists("styles/style-user-strokes.npy") else None
 
 engine = HomeworkEngine(
     checkpoint_dir="checkpoints",
@@ -198,25 +207,24 @@ generated_images, pdf_path = engine.generate_homework(
     text=HOMEWORK_TEXT,
     blank_sheet_paths=[blank_sheet],
     output_dir="output_homework",
-    custom_style_prefix=custom_prefix,
     max_chars_per_line=50
 )
 
 print(f"Generated {len(generated_images)} homework pages!")
     """)
 
-    # Cell 7: Preview High-Contrast Scanned Pages
-    add_md("## 7. Step 5: Preview Scanned Assignment Pages & Download PDF")
+    # Cell 8: Preview Final High-Contrast Pages & PDF
+    add_md("## 8. Step 6: Preview Output Pages & Download Submission PDF")
     add_code("""
 for idx, img_path in enumerate(generated_images):
     img = Image.open(img_path)
     plt.figure(figsize=(10, 14))
     plt.imshow(img)
-    plt.title(f"Homework Page {idx + 1}")
+    plt.title(f"Generated Homework - Page {idx + 1}")
     plt.axis("off")
     plt.show()
 
-print(f"Submission PDF ready at: {pdf_path}")
+print(f"\\nDownload your submission PDF from: {pdf_path}")
     """)
 
     notebook_data = {
