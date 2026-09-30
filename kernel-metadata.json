@@ -1,5 +1,5 @@
 {
-  "id": "sujaykid/homework-bud-synthesis",
+  "id": "sujaykid/homework-bud-handwriting-synthesis",
   "title": "Homework-Bud Handwriting Synthesis",
   "code_file": "homework_bud_kaggle.ipynb",
   "language": "python",
@@ -8,7 +8,9 @@
   "enable_gpu": "true",
   "enable_tpu": "false",
   "enable_internet": "true",
-  "dataset_sources": [],
+  "dataset_sources": [
+    "sujaykid/homework-bud-data"
+  ],
   "competition_sources": [],
   "kernel_sources": [],
   "model_sources": []

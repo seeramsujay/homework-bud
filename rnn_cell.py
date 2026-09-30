@@ -13,7 +13,34 @@ LSTMAttentionCellState = namedtuple(
 )
 
 
-class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
+def custom_lstm_step(inputs, h, c, scope_name, input_dim, units=400):
+    """
+    Exact mathematical equivalent of standard LSTMCell.
+    Uses variable names 'kernel' and 'bias' under scope_name so pre-trained weights
+    load identically without any dependence on tf.nn.rnn_cell.RNNCell or Keras 3.
+    gate order in TF1 LSTMCell: [i, j, f, o]
+    """
+    with tf.variable_scope(scope_name, reuse=tf.AUTO_REUSE):
+        kernel = tf.get_variable(
+            name='kernel',
+            shape=[input_dim + units, 4 * units],
+            dtype=tf.float32
+        )
+        bias = tf.get_variable(
+            name='bias',
+            shape=[4 * units],
+            dtype=tf.float32,
+            initializer=tf.zeros_initializer()
+        )
+        concat_in = tf.concat([inputs, h], axis=1)
+        gates = tf.matmul(concat_in, kernel) + bias
+        i, j, f, o = tf.split(gates, 4, axis=1)
+        new_c = tf.nn.sigmoid(f + 1.0) * c + tf.nn.sigmoid(i) * tf.nn.tanh(j)
+        new_h = tf.nn.sigmoid(o) * tf.nn.tanh(new_c)
+        return new_h, new_c
+
+
+class LSTMAttentionCell:
 
     def __init__(
         self,
@@ -75,13 +102,13 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or type(self).__name__, reuse=tf.AUTO_REUSE):
 
-            # lstm 1
+            # lstm 1 (scope: lstm_cell)
             s1_in = tf.concat([state.w, inputs], axis=1)
-            cell1 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
-            s1_out, s1_state = cell1(s1_in, state=(state.c1, state.h1))
+            # input_dim = window_size (73) + inputs (3) = 76
+            s1_h, s1_c = custom_lstm_step(s1_in, state.h1, state.c1, 'lstm_cell', input_dim=76, units=self.lstm_size)
 
             # attention
-            attention_inputs = tf.concat([state.w, inputs, s1_out], axis=1)
+            attention_inputs = tf.concat([state.w, inputs, s1_h], axis=1)
             attention_params = dense_layer(attention_inputs, 3*self.num_attn_mixture_components, scope='attention')
             alpha, beta, kappa = tf.split(tf.nn.softplus(attention_params), 3, axis=1)
             kappa = state.kappa + kappa / 25.0
@@ -99,23 +126,23 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
             sequence_mask = tf.expand_dims(sequence_mask, 2)
             w = tf.reduce_sum(phi*self.attention_values*sequence_mask, axis=1)
 
-            # lstm 2
-            s2_in = tf.concat([inputs, s1_out, w], axis=1)
-            cell2 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
-            s2_out, s2_state = cell2(s2_in, state=(state.c2, state.h2))
+            # lstm 2 (scope: lstm_cell_1)
+            # inputs (3) + s1_h (400) + w (73) = 476
+            s2_in = tf.concat([inputs, s1_h, w], axis=1)
+            s2_h, s2_c = custom_lstm_step(s2_in, state.h2, state.c2, 'lstm_cell_1', input_dim=476, units=self.lstm_size)
 
-            # lstm 3
-            s3_in = tf.concat([inputs, s2_out, w], axis=1)
-            cell3 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
-            s3_out, s3_state = cell3(s3_in, state=(state.c3, state.h3))
+            # lstm 3 (scope: lstm_cell_2)
+            # inputs (3) + s2_h (400) + w (73) = 476
+            s3_in = tf.concat([inputs, s2_h, w], axis=1)
+            s3_h, s3_c = custom_lstm_step(s3_in, state.h3, state.c3, 'lstm_cell_2', input_dim=476, units=self.lstm_size)
 
             new_state = LSTMAttentionCellState(
-                s1_state.h,
-                s1_state.c,
-                s2_state.h,
-                s2_state.c,
-                s3_state.h,
-                s3_state.c,
+                s1_h,
+                s1_c,
+                s2_h,
+                s2_c,
+                s3_h,
+                s3_c,
                 alpha_flat,
                 beta_flat,
                 kappa_flat,
@@ -123,7 +150,7 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
                 phi_flat,
             )
 
-            return s3_out, new_state
+            return s3_h, new_state
 
     def output_function(self, state):
         params = dense_layer(state.h3, self.output_units, scope='gmm', reuse=tf.AUTO_REUSE)
@@ -132,15 +159,13 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
         sigma1, sigma2 = tf.split(sigmas, 2, axis=1)
 
         # Standard 2D Gaussian sampling via reparameterization trick
-        # z1, z2 ~ Normal(0, 1)
         z1 = tf.random.normal(tf.shape(mu1))
         z2 = tf.random.normal(tf.shape(mu2))
         x1 = mu1 + sigma1 * z1
         x2 = mu2 + sigma2 * (rhos * z1 + tf.sqrt(tf.maximum(1.0 - tf.square(rhos), 1e-6)) * z2)
-        sampled_coords = tf.stack([x1, x2], axis=2)  # [batch, components, 2]
+        sampled_coords = tf.stack([x1, x2], axis=2)
 
         # Categorical sampling for mixture component
-        # Gumbel-max trick for sampling from categorical distribution without tf.contrib
         gumbel_noise = -tf.log(-tf.log(tf.random.uniform(tf.shape(pis), minval=1e-6, maxval=1.0) + 1e-8) + 1e-8)
         sampled_idx = tf.argmax(tf.log(pis + 1e-8) + gumbel_noise, axis=1)
 

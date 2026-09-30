@@ -106,11 +106,12 @@ def process_all_training_pages_to_lines(
     Segments all training pages into individual numbered line PNGs,
     runs OCR on each line crop, and writes lines_transcription.csv for review.
     """
-    image_paths = sorted(
-        glob.glob(os.path.join(training_images_dir, "*.jpeg")) +
-        glob.glob(os.path.join(training_images_dir, "*.jpg")) +
-        glob.glob(os.path.join(training_images_dir, "*.png"))
-    )
+    search_exts = ["*.jpeg", "*.jpg", "*.png", "*.JPEG", "*.JPG", "*.PNG"]
+    image_paths = []
+    for ext in search_exts:
+        image_paths.extend(glob.glob(os.path.join(training_images_dir, ext)))
+        image_paths.extend(glob.glob(os.path.join(training_images_dir, "**", ext), recursive=True))
+    image_paths = sorted(list(set(image_paths)))
     image_paths = [p for p in image_paths if "blank" not in os.path.basename(p).lower()]
 
     if not image_paths:
@@ -185,8 +186,12 @@ def process_all_training_pages_to_lines(
         writer.writeheader()
         writer.writerows(csv_rows)
 
+    import shutil
+    zip_path = shutil.make_archive("segmented_lines", "zip", output_lines_dir)
+
     print(f"\n[OK] Line segmentation & initial OCR complete!")
     print(f"  Cropped images: {output_lines_dir}/")
+    print(f"  Zipped archive: {zip_path}")
     print(f"  Review CSV: {csv_path}")
     print(f"  Total lines ready for review: {len(csv_rows)}")
     return csv_path
