@@ -1,7 +1,7 @@
 from collections import namedtuple
 
-import tensorflow as tf
-import tensorflow.contrib.distributions as tfd
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import numpy as np
 
 from tf_utils import dense_layer, shape
@@ -77,7 +77,7 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
 
             # lstm 1
             s1_in = tf.concat([state.w, inputs], axis=1)
-            cell1 = tf.contrib.rnn.LSTMCell(self.lstm_size)
+            cell1 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
             s1_out, s1_state = cell1(s1_in, state=(state.c1, state.h1))
 
             # attention
@@ -101,12 +101,12 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
 
             # lstm 2
             s2_in = tf.concat([inputs, s1_out, w], axis=1)
-            cell2 = tf.contrib.rnn.LSTMCell(self.lstm_size)
+            cell2 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
             s2_out, s2_state = cell2(s2_in, state=(state.c2, state.h2))
 
             # lstm 3
             s3_in = tf.concat([inputs, s2_out, w], axis=1)
-            cell3 = tf.contrib.rnn.LSTMCell(self.lstm_size)
+            cell3 = tf.nn.rnn_cell.LSTMCell(self.lstm_size)
             s3_out, s3_state = cell3(s3_in, state=(state.c3, state.h3))
 
             new_state = LSTMAttentionCellState(
@@ -129,25 +129,28 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
         params = dense_layer(state.h3, self.output_units, scope='gmm', reuse=tf.AUTO_REUSE)
         pis, mus, sigmas, rhos, es = self._parse_parameters(params)
         mu1, mu2 = tf.split(mus, 2, axis=1)
-        mus = tf.stack([mu1, mu2], axis=2)
         sigma1, sigma2 = tf.split(sigmas, 2, axis=1)
 
-        covar_matrix = [tf.square(sigma1), rhos*sigma1*sigma2,
-                        rhos*sigma1*sigma2, tf.square(sigma2)]
-        covar_matrix = tf.stack(covar_matrix, axis=2)
-        covar_matrix = tf.reshape(covar_matrix, (self.batch_size, self.num_output_mixture_components, 2, 2))
+        # Standard 2D Gaussian sampling via reparameterization trick
+        # z1, z2 ~ Normal(0, 1)
+        z1 = tf.random.normal(tf.shape(mu1))
+        z2 = tf.random.normal(tf.shape(mu2))
+        x1 = mu1 + sigma1 * z1
+        x2 = mu2 + sigma2 * (rhos * z1 + tf.sqrt(tf.maximum(1.0 - tf.square(rhos), 1e-6)) * z2)
+        sampled_coords = tf.stack([x1, x2], axis=2)  # [batch, components, 2]
 
-        mvn = tfd.MultivariateNormalFullCovariance(loc=mus, covariance_matrix=covar_matrix)
-        b = tfd.Bernoulli(probs=es)
-        c = tfd.Categorical(probs=pis)
+        # Categorical sampling for mixture component
+        # Gumbel-max trick for sampling from categorical distribution without tf.contrib
+        gumbel_noise = -tf.log(-tf.log(tf.random.uniform(tf.shape(pis), minval=1e-6, maxval=1.0) + 1e-8) + 1e-8)
+        sampled_idx = tf.argmax(tf.log(pis + 1e-8) + gumbel_noise, axis=1)
 
-        sampled_e = b.sample()
-        sampled_coords = mvn.sample()
-        sampled_idx = c.sample()
+        # Bernoulli sampling for end of stroke
+        rand_u = tf.random.uniform(tf.shape(es))
+        sampled_e = tf.cast(rand_u < es, tf.float32)
 
-        idx = tf.stack([tf.range(self.batch_size), sampled_idx], axis=1)
+        idx = tf.stack([tf.range(self.batch_size), tf.cast(sampled_idx, tf.int32)], axis=1)
         coords = tf.gather_nd(sampled_coords, idx)
-        return tf.concat([coords, tf.cast(sampled_e, tf.float32)], axis=1)
+        return tf.concat([coords, sampled_e], axis=1)
 
     def termination_condition(self, state):
         char_idx = tf.cast(tf.argmax(state.phi, axis=1), tf.int32)
@@ -168,16 +171,12 @@ class LSTMAttentionCell(tf.nn.rnn_cell.RNNCell):
                 2*self.num_output_mixture_components,
                 1
             ],
-            axis=-1
+            axis=1
         )
-        pis = pis*(1 + tf.expand_dims(self.bias, 1))
-        sigmas = sigmas - tf.expand_dims(self.bias, 1)
 
-        pis = tf.nn.softmax(pis, axis=-1)
-        pis = tf.where(pis < .01, tf.zeros_like(pis), pis)
-        sigmas = tf.clip_by_value(tf.exp(sigmas), sigma_eps, np.inf)
-        rhos = tf.clip_by_value(tf.tanh(rhos), eps - 1.0, 1.0 - eps)
-        es = tf.clip_by_value(tf.nn.sigmoid(es), eps, 1.0 - eps)
-        es = tf.where(es < .01, tf.zeros_like(es), es)
+        pis = tf.nn.softmax(pis * (1 + self.bias))
+        sigmas = tf.exp(sigmas - self.bias) + sigma_eps
+        rhos = tf.clip_by_value(tf.tanh(rhos), -1.0 + eps, 1.0 - eps)
+        es = tf.clip_by_value(tf.nn.sigmoid(es)*(1 + self.bias), eps, 1.0 - eps)
 
         return pis, mus, sigmas, rhos, es
