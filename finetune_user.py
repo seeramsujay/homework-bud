@@ -13,7 +13,7 @@ def finetune_user_handwriting(
     data_dir: str = 'data/processed/',
     checkpoint_dir: str = 'checkpoints',
     warm_start_step: int = 17900,
-    finetune_steps: int = 2500,
+    finetune_steps: int = 150,
     learning_rate: float = 0.00005,
     batch_size: int = 16
 ):
@@ -33,7 +33,7 @@ def finetune_user_handwriting(
         prediction_dir='predictions',
         learning_rates=[learning_rate],
         batch_sizes=[batch_size],
-        patiences=[500],
+        patiences=[100],
         beta1_decays=[0.9],
         validation_batch_size=min(batch_size, len(dr.val_df) if len(dr.val_df) > 0 else 1),
         optimizer='rms',
@@ -42,7 +42,7 @@ def finetune_user_handwriting(
         regularization_constant=0.0001,  # Weight regularization to avoid catastrophic forgetting
         keep_prob=0.9,
         enable_parameter_averaging=False,
-        min_steps_to_checkpoint=200,
+        min_steps_to_checkpoint=20,
         log_interval=20,
         grad_clip=10,
         lstm_size=400,

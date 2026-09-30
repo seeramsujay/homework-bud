@@ -144,12 +144,12 @@ build_dataset_from_verified_csv(
     add_code("""
 from finetune_user import finetune_user_handwriting
 
-# Fine-tune starting from warm_start_step 17900 for 1500 steps
+# Fine-tune starting from warm_start_step 17900 for 150 steps (~10 full epochs)
 finetune_user_handwriting(
     data_dir="data/processed/",
     checkpoint_dir="checkpoints",
     warm_start_step=17900,
-    finetune_steps=1500,
+    finetune_steps=150,
     learning_rate=0.00005,
     batch_size=16
 )

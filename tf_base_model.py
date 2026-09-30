@@ -146,45 +146,6 @@ class TFBaseModel(object):
 
             while step < self.num_training_steps:
 
-                # validation evaluation
-                val_start = time.time()
-                val_batch_df = next(val_generator)
-                val_feed_dict = {
-                    getattr(self, placeholder_name, None): data
-                    for placeholder_name, data in val_batch_df.items() if hasattr(self, placeholder_name)
-                }
-
-                val_feed_dict.update({self.learning_rate_var: self.learning_rate, self.beta1_decay_var: self.beta1_decay})
-                if hasattr(self, 'keep_prob'):
-                    val_feed_dict.update({self.keep_prob: 1.0})
-                if hasattr(self, 'is_training'):
-                    val_feed_dict.update({self.is_training: False})
-
-                results = self.session.run(
-                    fetches=[self.loss] + list(self.metrics.values()),
-                    feed_dict=val_feed_dict
-                )
-                val_loss = results[0]
-                val_metrics = results[1:] if len(results) > 1 else []
-                val_metrics = dict(zip(self.metrics.keys(), val_metrics))
-                val_loss_history.append(val_loss)
-                val_time_history.append(time.time() - val_start)
-                for key in val_metrics:
-                    metric_histories[key].append(val_metrics[key])
-
-                if hasattr(self, 'monitor_tensors'):
-                    for name, tensor in self.monitor_tensors.items():
-                        [np_val] = self.session.run([tensor], feed_dict=val_feed_dict)
-                        print(name)
-                        print('min', np_val.min())
-                        print('max', np_val.max())
-                        print('mean', np_val.mean())
-                        print('std', np_val.std())
-                        print('nans', np.isnan(np_val).sum())
-                        print()
-                    print()
-                    print()
-
                 # train step
                 train_start = time.time()
                 train_batch_df = next(train_generator)
@@ -207,6 +168,32 @@ class TFBaseModel(object):
                 train_time_history.append(time.time() - train_start)
 
                 if step % self.log_interval == 0:
+                    # validation evaluation only when logging
+                    val_start = time.time()
+                    val_batch_df = next(val_generator)
+                    val_feed_dict = {
+                        getattr(self, placeholder_name, None): data
+                        for placeholder_name, data in val_batch_df.items() if hasattr(self, placeholder_name)
+                    }
+
+                    val_feed_dict.update({self.learning_rate_var: self.learning_rate, self.beta1_decay_var: self.beta1_decay})
+                    if hasattr(self, 'keep_prob'):
+                        val_feed_dict.update({self.keep_prob: 1.0})
+                    if hasattr(self, 'is_training'):
+                        val_feed_dict.update({self.is_training: False})
+
+                    results = self.session.run(
+                        fetches=[self.loss] + list(self.metrics.values()),
+                        feed_dict=val_feed_dict
+                    )
+                    val_loss = results[0]
+                    val_metrics = results[1:] if len(results) > 1 else []
+                    val_metrics = dict(zip(self.metrics.keys(), val_metrics))
+                    val_loss_history.append(val_loss)
+                    val_time_history.append(time.time() - val_start)
+                    for key in val_metrics:
+                        metric_histories[key].append(val_metrics[key])
+
                     avg_train_loss = sum(train_loss_history) / len(train_loss_history)
                     avg_val_loss = sum(val_loss_history) / len(val_loss_history)
                     avg_train_time = sum(train_time_history) / len(train_time_history)
