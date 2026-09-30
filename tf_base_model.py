@@ -161,7 +161,7 @@ class TFBaseModel(object):
                     val_feed_dict.update({self.is_training: False})
 
                 results = self.session.run(
-                    fetches=[self.loss] + self.metrics.values(),
+                    fetches=[self.loss] + list(self.metrics.values()),
                     feed_dict=val_feed_dict
                 )
                 val_loss = results[0]
@@ -230,6 +230,7 @@ class TFBaseModel(object):
                             early_stopping_metric = metric_val
 
                     logging.info(metric_log)
+                    print(metric_log)
 
                     if early_stopping_metric < best_validation_loss:
                         best_validation_loss = early_stopping_metric
