@@ -1,7 +1,7 @@
 """
-Script to generate the Kaggle notebook for Stage 1: Line Segmentation & GPU Neural OCR.
-Extracts individual text lines from notebook pages, runs EasyOCR on Kaggle GPU,
-and exports lines_transcription.csv + segmented_lines.zip for manual verification.
+Script to generate the Kaggle notebook for Stage 2:
+Fine-Tuning Alex Graves Handwriting Synthesis RNN on User's Current Handwriting
+and Synthesizing Ruled Homework Sheets.
 """
 
 import json
@@ -27,19 +27,12 @@ def create_notebook():
 
     # Header
     add_md("""
-# 📝 Homework-Bud: Stage 1 — Line Segmentation & Neural OCR
-### Automatically segments notebook pages into numbered line PNGs, runs GPU-accelerated EasyOCR on each line, and exports `lines_transcription.csv` & `segmented_lines.zip` for user verification.
-
----
-### 🌟 Stage 1 Goals:
-1. **Detect & Slice Lines**: Automatically detects ink line baselines and crops each handwritten line into `segmented_lines/line_XXXX.png`.
-2. **GPU Neural OCR**: Runs EasyOCR with GPU acceleration to transcribe each line crop.
-3. **Export for Review**: Saves `lines_transcription.csv` (with `ocr_transcription` and `user_verified_transcription`) and `segmented_lines.zip` in `/kaggle/working/`.
-4. **Visual Gallery**: Renders line crops with their recognized text directly in the notebook for immediate inspection.
+# 📝 Homework-Bud: Fine-Tuning & Ruled Homework Synthesis
+### Trains Alex Graves' Handwriting Synthesis RNN on the user's personal handwriting (prioritizing current style from `7.jpeg`) and synthesizes multi-page ruled homework assignments in Royal Blue ink.
     """)
 
-    # Cell 1: Setup & Dependencies
-    add_md("## 1. Setup & Dependencies")
+    # Cell 1: Environment & Setup
+    add_md("## 1. Environment & Setup")
     add_code("""
 import os
 import sys
@@ -47,15 +40,15 @@ import glob
 import shutil
 import subprocess
 
-# Install imaging and table libraries
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
+# Install dependencies
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless", "pillow", "pandas", "matplotlib", "reportlab", "svgwrite"], check=True)
 
 # Clone or pull latest project repository
-if not os.path.exists("line_segmenter.py"):
+if not os.path.exists("repo_code"):
     os.system("git clone --depth 1 https://github.com/seeramsujay/homework-bud.git repo_code")
-    os.system("cp -rn repo_code/* . 2>/dev/null || true")
+    os.system("cp -rf repo_code/* . 2>/dev/null || true")
 else:
-    os.system("cd repo_code && git pull 2>/dev/null && cp -rf * .. 2>/dev/null || true")
+    os.system("cd repo_code && git pull && cp -rf * .. 2>/dev/null || true")
 
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
@@ -67,103 +60,172 @@ if torch.cuda.is_available():
 print("Environment initialized successfully!")
     """)
 
-    # Cell 2: Locate Training Pages
-    add_md("## 2. Locate Training Pages")
+    # Cell 2: Locate Dataset & Training Pages
+    add_md("## 2. Locate Dataset Assets & Training Pages")
     add_code("""
-# Locate training images from attached dataset or workspace
-candidate_dirs = [
-    "/kaggle/input/homework-bud-data/Training_Images",
-    "/kaggle/input/homework-bud-data",
-    "/kaggle/input",
-    "Training_Images",
-    "kaggle_dataset_bundle/Training_Images"
-]
+dataset_dir = "/kaggle/input/homework-bud-data"
 
-train_dir = None
-for d in candidate_dirs:
-    if os.path.exists(d):
-        found = glob.glob(os.path.join(d, "**", "*.jp*g"), recursive=True) + glob.glob(os.path.join(d, "**", "*.png"), recursive=True)
-        found = [p for p in found if "blank" not in os.path.basename(p).lower()]
-        if found:
-            train_dir = d
-            print(f"[OK] Found {len(found)} training pages in: {train_dir}")
-            for p in sorted(found):
-                print(f"  - {os.path.basename(p)}")
-            break
+# Copy base checkpoints
+if os.path.exists(os.path.join(dataset_dir, "checkpoints")):
+    os.makedirs("checkpoints", exist_ok=True)
+    os.system(f"cp -rf {dataset_dir}/checkpoints/* checkpoints/")
+    print(f"[OK] Copied base checkpoints to checkpoints/")
 
-if train_dir is None:
-    raise FileNotFoundError("Could not find any training pages in candidate directories!")
+# Copy styles
+if os.path.exists(os.path.join(dataset_dir, "styles")):
+    os.makedirs("styles", exist_ok=True)
+    os.system(f"cp -rf {dataset_dir}/styles/* styles/")
+    print(f"[OK] Copied styles to styles/")
+
+# Copy Blank_Page.jpeg
+for blank_candidate in [os.path.join(dataset_dir, "Blank_Page.jpeg"), "Blank_Page.jpeg"]:
+    if os.path.exists(blank_candidate):
+        shutil.copy(blank_candidate, "Blank_Page.jpeg")
+        print(f"[OK] Blank ruled page ready: Blank_Page.jpeg")
+        break
+
+# Locate training images directory
+train_dir = os.path.join(dataset_dir, "Training_Images")
+if not os.path.exists(train_dir):
+    train_dir = "Training_Images"
+
+train_images = sorted(glob.glob(os.path.join(train_dir, "*.jp*g")) + glob.glob(os.path.join(train_dir, "*.png")))
+train_images = [p for p in train_images if "blank" not in os.path.basename(p).lower()]
+print(f"[OK] Found {len(train_images)} training pages in {train_dir}:")
+for p in train_images:
+    print(f"  - {os.path.basename(p)}")
+
+# Copy lines_transcription.csv
+if os.path.exists(os.path.join(dataset_dir, "lines_transcription.csv")):
+    shutil.copy(os.path.join(dataset_dir, "lines_transcription.csv"), "lines_transcription.csv")
+    print(f"[OK] Verified lines_transcription.csv ready from dataset.")
     """)
 
-    # Cell 3: Run Line Segmentation & Neural OCR
-    add_md("## 3. Run Line Segmentation & GPU Neural OCR")
+    # Cell 3: Segment Lines
+    add_md("## 3. Segment Training Pages into Lines")
     add_code("""
-from line_segmenter import process_all_training_pages_to_lines
+from line_segmenter import segment_page_into_lines
+import pandas as pd
 
 output_lines_dir = "segmented_lines"
-csv_path = "lines_transcription.csv"
+os.makedirs(output_lines_dir, exist_ok=True)
 
-# Process all pages: crop lines + run neural OCR + create zip archive
-process_all_training_pages_to_lines(
-    training_images_dir=train_dir,
-    output_lines_dir=output_lines_dir,
-    csv_path=csv_path
+next_line_idx = 1
+total_cropped = 0
+for p in train_images:
+    crops, next_line_idx = segment_page_into_lines(p, output_lines_dir, start_line_idx=next_line_idx)
+    print(f"  {os.path.basename(p):<10} -> {len(crops)} line crops (up to line_{next_line_idx - 1:04d})")
+    total_cropped += len(crops)
+
+print(f"\\n[OK] Sliced {total_cropped} total lines across all {len(train_images)} pages!")
+
+df_check = pd.read_csv("lines_transcription.csv")
+print(f"[OK] lines_transcription.csv contains {len(df_check)} verified entries!")
+display(df_check.tail(10))
+    """)
+
+    # Cell 4: Build Fine-Tuning Dataset (Prioritizing 7.jpeg)
+    add_md("## 4. Extract Sequential Strokes & Weight Current Handwriting (7.jpeg)")
+    add_code("""
+from build_dataset_verified import build_dataset_from_verified_csv
+
+build_dataset_from_verified_csv(
+    csv_path="lines_transcription.csv",
+    lines_dir="segmented_lines",
+    output_dir="data/processed",
+    current_page="7.jpeg",
+    current_page_multiplier=12,
+    style_output_prefix="styles/style-user-current"
 )
     """)
 
-    # Cell 4: Review Extracted Transcriptions
-    add_md("## 4. Review OCR Transcriptions Table")
+    # Cell 5: Fine-Tune Graves RNN on Kaggle GPU
+    add_md("## 5. Fine-Tune Graves RNN on GPU")
     add_code("""
-import pandas as pd
+from finetune_user import finetune_user_handwriting
 
-df = pd.read_csv("lines_transcription.csv")
-print(f"Extracted {len(df)} lines from {df['source_page'].nunique()} training pages!")
-print(f"Columns: {list(df.columns)}")
-
-# Display preview table
-display(df.head(25))
+# Fine-tune starting from warm_start_step 17900 for 1500 steps
+finetune_user_handwriting(
+    data_dir="data/processed/",
+    checkpoint_dir="checkpoints",
+    warm_start_step=17900,
+    finetune_steps=1500,
+    learning_rate=0.00005,
+    batch_size=16
+)
     """)
 
-    # Cell 5: Visual Inspection Gallery
-    add_md("## 5. Visual Inspection of Cropped Lines")
+    # Cell 6: End-to-End Ruled Homework Synthesis
+    add_md("## 6. Synthesize Ruled Homework in Royal Blue Ink")
+    add_code("""
+from homework_engine import HomeworkEngine
+
+homework_text = \"\"\"Assignment: Principles of Modern Physics & Mechanics
+Question 1: Explain the photoelectric effect and how Planck's hypothesis contributed to Einstein's discovery.
+Answer: The photoelectric effect demonstrates that light consists of discrete energy packets called quanta or photons. In 1905, Albert Einstein proposed that each photon carries energy proportional to its frequency, given by the relation E = hf. When incident photons strike a metallic surface, their entire quantum of energy is transferred instantaneously to conduction electrons. If the photon energy exceeds the work function of the material, electrons are emitted with maximum kinetic energy.
+
+Question 2: State Newton's second law and describe why momentum is conserved in an isolated system.
+Answer: Newton's second law establishes that the net applied external force equals the rate of change of linear momentum. In the absence of external forces, the total momentum of interacting bodies remains strictly constant across all collisions. This conservation law underlies both classical dynamics and relativistic interactions.
+\"\"\"
+
+engine = HomeworkEngine(
+    checkpoint_dir="checkpoints",
+    styles_dir="styles",
+    ink_rgb=(26, 62, 175), # Royal Blue
+    bias=0.88               # Clean, consistent handwriting
+)
+
+output_pages, pdf_path = engine.generate_homework(
+    text=homework_text,
+    blank_sheet_paths=["Blank_Page.jpeg"],
+    output_dir="output",
+    custom_style_prefix="styles/style-user-current" if os.path.exists("styles/style-user-current-strokes.npy") else None,
+    max_chars_per_line=58
+)
+
+print(f"\\n[DONE] Generated {len(output_pages)} pages:")
+for p in output_pages:
+    print(f"  - {p}")
+print(f"Assignment PDF: {pdf_path}")
+    """)
+
+    # Cell 7: Display Synthesized Homework Image
+    add_md("## 7. Visual Inspection of Synthesized Ruled Homework")
     add_code("""
 import matplotlib.pyplot as plt
 from PIL import Image
 
-sample_count = min(10, len(df))
-sample_df = df.head(sample_count)
-
-plt.figure(figsize=(15, 2.2 * sample_count))
-for i, (_, row) in enumerate(sample_df.iterrows()):
-    img_path = os.path.join("segmented_lines", row['filename'])
-    if os.path.exists(img_path):
-        img = Image.open(img_path)
-        plt.subplot(sample_count, 1, i + 1)
-        plt.imshow(img)
-        title_text = f"[{row['filename']}] OCR: " + str(row['ocr_transcription'])
-        plt.title(title_text, fontsize=10, loc='left')
-        plt.axis("off")
-plt.tight_layout()
-plt.show()
+if output_pages:
+    first_page = Image.open(output_pages[0])
+    plt.figure(figsize=(14, 18))
+    plt.imshow(first_page)
+    plt.title("Synthesized Homework Assignment (Ruled Sheet + Royal Blue Ink)", fontsize=14)
+    plt.axis("off")
+    plt.show()
     """)
 
-    # Cell 6: Export Artifacts Summary
-    add_md("## 6. Generated Output Artifacts")
+    # Cell 8: Package Artifacts
+    add_md("## 8. Package & Export Artifacts for Download")
     add_code("""
-print("=" * 60)
-print("STAGE 1 ARTIFACTS READY FOR DOWNLOAD:")
-print("=" * 60)
+import shutil
 
-for f in ["lines_transcription.csv", "segmented_lines.zip"]:
+# 1. Zip fine-tuned checkpoints
+shutil.make_archive("finetuned_checkpoints", "zip", "checkpoints")
+
+# 2. Zip output pages & PDF
+shutil.make_archive("homework_output", "zip", "output")
+
+# 3. Zip custom user style
+shutil.make_archive("user_style", "zip", "styles")
+
+print("=" * 65)
+print("FINETUNING & SYNTHESIS ARTIFACTS READY:")
+print("=" * 65)
+for f in ["finetuned_checkpoints.zip", "homework_output.zip", "user_style.zip", "output/homework_assignment.pdf"]:
     if os.path.exists(f):
         size_mb = os.path.getsize(f) / (1024 * 1024)
-        print(f"  ✓ {f:<26} ({size_mb:.2f} MB)")
-
-print("\\nInstructions:")
-print("1. Download 'lines_transcription.csv' and 'segmented_lines.zip' from Kaggle Output.")
-print("2. Open 'lines_transcription.csv' to review and verify the 'user_verified_transcription' column.")
-print("3. When verified, upload the CSV back for Stage 2 (RNN Fine-Tuning & Homework Synthesis)!")
-print("=" * 60)
+        print(f"  ✓ {f:<35} ({size_mb:.2f} MB)")
+print("=" * 65)
     """)
 
     notebook_data = {
