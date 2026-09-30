@@ -13,3 +13,12 @@ output_homework/
 test_blank_ruled.jpg
 test_homework.pdf
 test_rendered_homework.jpg
+
+# User data & private training files
+Blank_Page.jpeg
+Training_Images/
+*.jpeg
+*.jpg
+*.png
+*.pdf
+!img/*
