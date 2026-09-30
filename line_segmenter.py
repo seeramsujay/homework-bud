@@ -128,18 +128,37 @@ def process_all_training_pages_to_lines(
 
     print(f"\n[INFO] Cropped {len(all_crops)} line images. Running neural OCR on each crop...")
 
+    has_trocr = False
+    has_easyocr = False
+    trocr_processor = None
+    trocr_model = None
+    device = "cpu"
+
     try:
-        import easyocr
-        reader = easyocr.Reader(['en'], gpu=True)
-        has_easyocr = True
-    except Exception:
+        import torch
+        from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+        from PIL import Image
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"[INFO] Loading Microsoft TrOCR handwriting vision model on {device}...")
+        trocr_processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
+        trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten").to(device)
+        trocr_model.eval()
+        has_trocr = True
+        print("[OK] TrOCR handwriting vision model ready!")
+    except Exception as e:
+        print(f"[WARN] TrOCR not loaded ({e}), falling back to EasyOCR...")
         try:
             import easyocr
-            reader = easyocr.Reader(['en'], gpu=False)
+            reader = easyocr.Reader(['en'], gpu=True)
             has_easyocr = True
         except Exception:
-            import pytesseract
-            has_easyocr = False
+            try:
+                import easyocr
+                reader = easyocr.Reader(['en'], gpu=False)
+                has_easyocr = True
+            except Exception:
+                import pytesseract
+                has_easyocr = False
 
     csv_rows = []
     valid_charset = set(drawing.alphabet)
@@ -149,7 +168,15 @@ def process_all_training_pages_to_lines(
         ocr_text = ""
 
         try:
-            if has_easyocr:
+            if has_trocr:
+                from PIL import Image
+                import torch
+                pil_img = Image.open(crop_path).convert("RGB")
+                pixel_values = trocr_processor(pil_img, return_tensors="pt").pixel_values.to(device)
+                with torch.no_grad():
+                    generated_ids = trocr_model.generate(pixel_values, max_new_tokens=64)
+                ocr_text = trocr_processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+            elif has_easyocr:
                 res = reader.readtext(crop_path, detail=0)
                 ocr_text = " ".join(res).strip()
             else:

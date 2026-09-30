@@ -47,13 +47,15 @@ import glob
 import shutil
 import subprocess
 
-# Install high-performance neural OCR and imaging libraries
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "easyocr", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
+# Install high-performance neural vision OCR and imaging libraries
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "transformers", "sentencepiece", "accelerate", "easyocr", "opencv-python-headless", "pillow", "pandas", "matplotlib"], check=True)
 
-# Clone project repository if helper files are not present
+# Clone or pull latest project repository
 if not os.path.exists("line_segmenter.py"):
     os.system("git clone --depth 1 https://github.com/seeramsujay/homework-bud.git repo_code")
     os.system("cp -rn repo_code/* . 2>/dev/null || true")
+else:
+    os.system("cd repo_code && git pull 2>/dev/null && cp -rf * .. 2>/dev/null || true")
 
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
