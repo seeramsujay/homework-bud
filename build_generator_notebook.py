@@ -73,50 +73,64 @@ candidate_dirs = [
 os.makedirs("checkpoints", exist_ok=True)
 os.makedirs("styles", exist_ok=True)
 
-# 1. Extract checkpoints
+# 1. Search for fine-tuned checkpoints anywhere in /kaggle/input or local
 checkpoints_found = False
-for c_dir in candidate_dirs:
-    zip_path = os.path.join(c_dir, "finetuned_checkpoints.zip")
-    if os.path.exists(zip_path):
-        print(f"[OK] Extracting fine-tuned checkpoints from {zip_path}...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall("checkpoints")
-        checkpoints_found = True
-        break
-    elif os.path.exists(os.path.join(c_dir, "checkpoints")):
-        files = glob.glob(os.path.join(c_dir, "checkpoints", "model-*"))
-        if files:
-            print(f"[OK] Copying checkpoints from {c_dir}/checkpoints...")
-            os.system(f"cp -rf {c_dir}/checkpoints/* checkpoints/")
-            checkpoints_found = True
+for search_root in ["/kaggle/input", "."]:
+    if not os.path.exists(search_root):
+        continue
+    for root, dirs, files in os.walk(search_root):
+        for f in files:
+            if "finetuned_checkpoints" in f and f.endswith(".zip"):
+                zip_path = os.path.join(root, f)
+                print(f"[OK] Extracting fine-tuned checkpoints from {zip_path}...")
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall("checkpoints")
+                checkpoints_found = True
+                break
+        if checkpoints_found:
             break
+    if checkpoints_found:
+        break
 
 if not checkpoints_found:
-    print("[WARNING] Could not locate fine-tuned checkpoints archive; checking local directory...")
+    print("[WARNING] Could not find finetuned_checkpoints.zip, searching for existing model checkpoints...")
+    for search_root in ["/kaggle/input", "."]:
+        if not os.path.exists(search_root):
+            continue
+        for root, dirs, files in os.walk(search_root):
+            for f in files:
+                if f.startswith("model-") and not f.endswith(".zip"):
+                    shutil.copy(os.path.join(root, f), os.path.join("checkpoints", f))
+                    checkpoints_found = True
 
 # 2. Extract styles
 styles_found = False
-for c_dir in candidate_dirs:
-    zip_path = os.path.join(c_dir, "user_style.zip")
-    if os.path.exists(zip_path):
-        print(f"[OK] Extracting user style conditioning from {zip_path}...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall("styles")
-        styles_found = True
-        break
-    elif os.path.exists(os.path.join(c_dir, "styles")):
-        files = glob.glob(os.path.join(c_dir, "styles", "*.npy"))
-        if files:
-            os.system(f"cp -rf {c_dir}/styles/* styles/")
-            styles_found = True
+for search_root in ["/kaggle/input", "."]:
+    if not os.path.exists(search_root):
+        continue
+    for root, dirs, files in os.walk(search_root):
+        for f in files:
+            if "user_style" in f and f.endswith(".zip"):
+                zip_path = os.path.join(root, f)
+                print(f"[OK] Extracting user style conditioning from {zip_path}...")
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall("styles")
+                styles_found = True
+                break
+            elif "style-user-current" in f and f.endswith(".npy"):
+                shutil.copy(os.path.join(root, f), os.path.join("styles", f))
+                styles_found = True
+        if styles_found:
             break
+    if styles_found:
+        break
 
 # 3. Discover all blank ruled sheet candidates to cycle through
 blank_sheets = []
-for c_dir in candidate_dirs:
-    if not os.path.exists(c_dir):
+for search_root in ["/kaggle/input", "."]:
+    if not os.path.exists(search_root):
         continue
-    for root, dirs, files in os.walk(c_dir):
+    for root, dirs, files in os.walk(search_root):
         for f in files:
             if "blank" in f.lower() and f.lower().endswith(('.jpg', '.jpeg', '.png')):
                 full_path = os.path.join(root, f)
@@ -127,9 +141,10 @@ for c_dir in candidate_dirs:
                     blank_sheets.append(dest)
 
 if not blank_sheets:
-    for fallback in ["repo_code/Blank_Page.jpeg", "Blank_Page.jpeg"]:
+    for fallback in ["Blank_Page.jpeg", "repo_code/Blank_Page.jpeg"]:
         if os.path.exists(fallback):
-            shutil.copy(fallback, "Blank_Page.jpeg")
+            if fallback != "Blank_Page.jpeg":
+                shutil.copy(fallback, "Blank_Page.jpeg")
             blank_sheets = ["Blank_Page.jpeg"]
             break
 
