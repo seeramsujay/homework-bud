@@ -3,8 +3,8 @@ data/raw/lineStrokes
 data/raw/original
 data/processed
 
-logs
-predictions
+logs/
+predictions/
 __pycache__/
 *.pyc
 .venv/
@@ -13,12 +13,20 @@ output_homework/
 test_blank_ruled.jpg
 test_homework.pdf
 test_rendered_homework.jpg
+*.log
+
+# Staged Kaggle dataset bundles
+kaggle/dataset/bundle/
+kaggle/dataset/staging/
+generator_bundle/
+original_style_bundle/
+kaggle_dataset_bundle/
 
 # User data & private training files
-Blank_Page.jpeg
 Training_Images/
 *.jpeg
 *.jpg
 *.png
 *.pdf
+!Blank_Page.jpeg
 !img/*

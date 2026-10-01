@@ -1,0 +1,17 @@
+{
+  "id": "sujaykid/homework-bud-original-rnn-style-6-generator",
+  "title": "Homework-Bud: Original RNN Style 6 Generator",
+  "code_file": "homework_original_style_generator.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "sujaykid/homework-bud-data"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
