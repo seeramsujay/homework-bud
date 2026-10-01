@@ -114,16 +114,24 @@ for c_dir in candidate_dirs:
 # 3. Discover all blank ruled sheet candidates to cycle through
 blank_sheets = []
 for c_dir in candidate_dirs:
-    found = sorted(glob.glob(os.path.join(c_dir, "Blank_Page*.jp*g")) + glob.glob(os.path.join(c_dir, "*blank*.jp*g")) + glob.glob(os.path.join(c_dir, "Blank_Pages", "*.jp*g")))
-    for b in found:
-        dest = os.path.basename(b)
-        if not os.path.exists(dest):
-            shutil.copy(b, dest)
-        if dest not in blank_sheets:
-            blank_sheets.append(dest)
+    if not os.path.exists(c_dir):
+        continue
+    for root, dirs, files in os.walk(c_dir):
+        for f in files:
+            if "blank" in f.lower() and f.lower().endswith(('.jpg', '.jpeg', '.png')):
+                full_path = os.path.join(root, f)
+                dest = os.path.basename(f)
+                if not os.path.exists(dest):
+                    shutil.copy(full_path, dest)
+                if dest not in blank_sheets:
+                    blank_sheets.append(dest)
 
-if not blank_sheets and os.path.exists("Blank_Page.jpeg"):
-    blank_sheets = ["Blank_Page.jpeg"]
+if not blank_sheets:
+    for fallback in ["repo_code/Blank_Page.jpeg", "Blank_Page.jpeg"]:
+        if os.path.exists(fallback):
+            shutil.copy(fallback, "Blank_Page.jpeg")
+            blank_sheets = ["Blank_Page.jpeg"]
+            break
 
 print(f"\\n[ASSETS READY]")
 print(f"  - Checkpoints: {len(glob.glob('checkpoints/*'))} files in checkpoints/")
