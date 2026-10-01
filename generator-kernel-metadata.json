@@ -1,0 +1,19 @@
+{
+  "id": "sujaykid/homework-bud-essay-generator",
+  "title": "Homework-Bud Essay & Assignment Generator",
+  "code_file": "homework_generator_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "sujaykid/homework-bud-data"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "sujaykid/homework-bud-handwriting-synthesis"
+  ],
+  "model_sources": []
+}

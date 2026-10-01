@@ -170,45 +170,74 @@ class HomeworkEngine:
         lines: List[str],
         biases: List[float],
         custom_strokes: np.ndarray,
-        custom_chars: str
+        custom_chars: str,
+        batch_size: int = 25
     ) -> List[np.ndarray]:
         """
         Samples handwriting conditioned on the user's custom stroke sequence.
+        Batches long-form essays (e.g. 1000+ words) into page-sized chunks for smooth execution.
         """
-        num_samples = len(lines)
-        max_tsteps = 40 * max([len(i) for i in lines]) if lines else 400
-
-        x_prime = np.zeros([num_samples, 1200, 3], dtype=np.float32)
-        x_prime_len = np.zeros([num_samples], dtype=np.int32)
-        chars = np.zeros([num_samples, 120], dtype=np.int32)
-        chars_len = np.zeros([num_samples], dtype=np.int32)
-
+        all_samples = []
         primed_prefix = custom_chars[:35].strip()
-        for i, line in enumerate(lines):
-            # Ensure full string fits comfortably inside 120 char array
-            max_line_len = max(10, 118 - len(primed_prefix) - 1)
-            clipped_line = line[:max_line_len]
-            full_str = f"{primed_prefix} {clipped_line}" if primed_prefix else clipped_line
-            encoded = drawing.encode_ascii(full_str)[:120]
-            encoded = np.array(encoded, dtype=np.int32)
 
-            stroke_len = min(len(custom_strokes), 1200)
-            x_prime[i, :stroke_len, :] = custom_strokes[:stroke_len]
-            x_prime_len[i] = stroke_len
-            chars[i, :len(encoded)] = encoded
-            chars_len[i] = len(encoded)
+        # Process in batches (e.g. 25 lines at a time)
+        for b_start in range(0, len(lines), batch_size):
+            b_lines = lines[b_start : b_start + batch_size]
+            b_biases = biases[b_start : b_start + batch_size]
 
-        [samples] = self.hand.nn.session.run(
-            [self.hand.nn.sampled_sequence],
-            feed_dict={
-                self.hand.nn.prime: True,
-                self.hand.nn.x_prime: x_prime,
-                self.hand.nn.x_prime_len: x_prime_len,
-                self.hand.nn.num_samples: num_samples,
-                self.hand.nn.sample_tsteps: max_tsteps,
-                self.hand.nn.c: chars,
-                self.hand.nn.c_len: chars_len,
-                self.hand.nn.bias: biases
-            }
-        )
-        return [sample[~np.all(sample == 0.0, axis=1)] for sample in samples]
+            # Separate non-empty lines from empty lines (paragraph gaps)
+            active_indices = [idx for idx, l in enumerate(b_lines) if l.strip()]
+            if not active_indices:
+                all_samples.extend([np.zeros((0, 3), dtype=np.float32) for _ in b_lines])
+                continue
+
+            active_lines = [b_lines[idx] for idx in active_indices]
+            active_biases = [b_biases[idx] for idx in active_indices]
+            num_samples = len(active_lines)
+            max_tsteps = 40 * max([len(i) for i in active_lines]) if active_lines else 400
+
+            x_prime = np.zeros([num_samples, 1200, 3], dtype=np.float32)
+            x_prime_len = np.zeros([num_samples], dtype=np.int32)
+            chars = np.zeros([num_samples, 120], dtype=np.int32)
+            chars_len = np.zeros([num_samples], dtype=np.int32)
+
+            for i, line in enumerate(active_lines):
+                max_line_len = max(10, 118 - len(primed_prefix) - 1)
+                clipped_line = line[:max_line_len]
+                full_str = f"{primed_prefix} {clipped_line}" if primed_prefix else clipped_line
+                encoded = drawing.encode_ascii(full_str)[:120]
+                encoded = np.array(encoded, dtype=np.int32)
+
+                stroke_len = min(len(custom_strokes), 1200)
+                x_prime[i, :stroke_len, :] = custom_strokes[:stroke_len]
+                x_prime_len[i] = stroke_len
+                chars[i, :len(encoded)] = encoded
+                chars_len[i] = len(encoded)
+
+            print(f"[INFO] Synthesizing lines {b_start + 1} to {min(b_start + batch_size, len(lines))} of {len(lines)}...")
+            [batch_samples] = self.hand.nn.session.run(
+                [self.hand.nn.sampled_sequence],
+                feed_dict={
+                    self.hand.nn.prime: True,
+                    self.hand.nn.x_prime: x_prime,
+                    self.hand.nn.x_prime_len: x_prime_len,
+                    self.hand.nn.num_samples: num_samples,
+                    self.hand.nn.sample_tsteps: max_tsteps,
+                    self.hand.nn.c: chars,
+                    self.hand.nn.c_len: chars_len,
+                    self.hand.nn.bias: active_biases
+                }
+            )
+
+            # Reconstruct batch with empty lines preserved
+            active_stroke_map = {}
+            for active_i, sample in zip(active_indices, batch_samples):
+                active_stroke_map[active_i] = sample[~np.all(sample == 0.0, axis=1)]
+
+            for local_idx in range(len(b_lines)):
+                if local_idx in active_stroke_map:
+                    all_samples.append(active_stroke_map[local_idx])
+                else:
+                    all_samples.append(np.zeros((0, 3), dtype=np.float32))
+
+        return all_samples
