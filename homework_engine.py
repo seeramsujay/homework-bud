@@ -126,8 +126,17 @@ class HomeworkEngine:
             # Sample with custom style
             stroke_lines = self._sample_with_custom_style(lines, biases, custom_strokes, custom_chars)
         elif style_id is not None:
-            styles = [style_id] * len(lines)
-            stroke_lines = self.hand._sample(lines, biases=biases, styles=styles)
+            style_prefix = f"{self.styles_dir}/style-{style_id}"
+            custom_strokes = np.load(f"{style_prefix}-strokes.npy")
+            chars_arr = np.load(f"{style_prefix}-chars.npy")
+            if chars_arr.dtype.kind in ('S', 'a', 'b'):
+                custom_chars = chars_arr.tobytes().decode('utf-8', errors='ignore')
+            elif hasattr(chars_arr, 'item'):
+                custom_chars = str(chars_arr.item())
+            else:
+                custom_chars = str(chars_arr)
+            custom_chars = custom_chars.strip('\x00').strip()
+            stroke_lines = self._sample_with_custom_style(lines, biases, custom_strokes, custom_chars)
         else:
             # Unconditioned style
             stroke_lines = self.hand._sample(lines, biases=biases, styles=None)
