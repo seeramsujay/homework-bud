@@ -112,10 +112,15 @@ class HomeworkEngine:
         styles = None
         if custom_style_prefix:
             # Custom style from user photo or touch recorder
-            # Copy or reference custom style as style 999 or use custom sampling
             custom_strokes = np.load(f"{custom_style_prefix}-strokes.npy")
-            with open(f"{custom_style_prefix}-chars.npy", 'rb') as f:
-                custom_chars = np.load(f).tostring().decode('utf-8', errors='ignore')
+            chars_arr = np.load(f"{custom_style_prefix}-chars.npy")
+            if chars_arr.dtype.kind in ('S', 'a', 'b'):
+                custom_chars = chars_arr.tobytes().decode('utf-8', errors='ignore')
+            elif hasattr(chars_arr, 'item'):
+                custom_chars = str(chars_arr.item())
+            else:
+                custom_chars = str(chars_arr)
+            custom_chars = custom_chars.strip('\x00').strip()
             # Sample with custom style
             stroke_lines = self._sample_with_custom_style(lines, biases, custom_strokes, custom_chars)
         elif style_id is not None:
@@ -176,13 +181,18 @@ class HomeworkEngine:
         chars = np.zeros([num_samples, 120], dtype=np.int32)
         chars_len = np.zeros([num_samples], dtype=np.int32)
 
+        primed_prefix = custom_chars[:35].strip()
         for i, line in enumerate(lines):
-            full_str = str(custom_chars) + " " + line
-            encoded = drawing.encode_ascii(full_str)
-            encoded = np.array(encoded)
+            # Ensure full string fits comfortably inside 120 char array
+            max_line_len = max(10, 118 - len(primed_prefix) - 1)
+            clipped_line = line[:max_line_len]
+            full_str = f"{primed_prefix} {clipped_line}" if primed_prefix else clipped_line
+            encoded = drawing.encode_ascii(full_str)[:120]
+            encoded = np.array(encoded, dtype=np.int32)
 
-            x_prime[i, :len(custom_strokes), :] = custom_strokes
-            x_prime_len[i] = len(custom_strokes)
+            stroke_len = min(len(custom_strokes), 1200)
+            x_prime[i, :stroke_len, :] = custom_strokes[:stroke_len]
+            x_prime_len[i] = stroke_len
             chars[i, :len(encoded)] = encoded
             chars_len[i] = len(encoded)
 

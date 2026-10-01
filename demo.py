@@ -74,14 +74,22 @@ class Hand(object):
         if styles is not None:
             for i, (cs, style) in enumerate(zip(lines, styles)):
                 x_p = np.load('styles/style-{}-strokes.npy'.format(style))
-                c_p = np.load('styles/style-{}-chars.npy'.format(style)).tostring().decode('utf-8')
+                chars_arr = np.load('styles/style-{}-chars.npy'.format(style))
+                if chars_arr.dtype.kind in ('S', 'a', 'b'):
+                    c_p = chars_arr.tobytes().decode('utf-8', errors='ignore')
+                elif hasattr(chars_arr, 'item'):
+                    c_p = str(chars_arr.item())
+                else:
+                    c_p = str(chars_arr)
+                c_p = c_p.strip('\x00').strip()[:35]
 
                 c_p = str(c_p) + " " + cs
-                c_p = drawing.encode_ascii(c_p)
+                c_p = drawing.encode_ascii(c_p)[:120]
                 c_p = np.array(c_p)
 
-                x_prime[i, :len(x_p), :] = x_p
-                x_prime_len[i] = len(x_p)
+                stroke_len = min(len(x_p), 1200)
+                x_prime[i, :stroke_len, :] = x_p[:stroke_len]
+                x_prime_len[i] = stroke_len
                 chars[i, :len(c_p)] = c_p
                 chars_len[i] = len(c_p)
 
