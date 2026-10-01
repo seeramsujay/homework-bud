@@ -173,7 +173,8 @@ class LSTMAttentionCell:
         rand_u = tf.random.uniform(tf.shape(es))
         sampled_e = tf.cast(rand_u < es, tf.float32)
 
-        idx = tf.stack([tf.range(self.batch_size), tf.cast(sampled_idx, tf.int32)], axis=1)
+        batch_sz = tf.shape(state.h3)[0]
+        idx = tf.stack([tf.range(batch_sz), tf.cast(sampled_idx, tf.int32)], axis=1)
         coords = tf.gather_nd(sampled_coords, idx)
         res = tf.concat([coords, sampled_e], axis=1)
         res.set_shape([None, 3])
@@ -201,9 +202,15 @@ class LSTMAttentionCell:
             axis=1
         )
 
-        pis = tf.nn.softmax(pis * (1 + self.bias))
-        sigmas = tf.exp(sigmas - self.bias) + sigma_eps
+        bias = tf.reshape(self.bias, [-1, 1])
+        pis = pis * (1 + bias)
+        sigmas = sigmas - bias
+
+        pis = tf.nn.softmax(pis, axis=-1)
+        pis = tf.where(pis < .01, tf.zeros_like(pis), pis)
+        sigmas = tf.clip_by_value(tf.exp(sigmas), sigma_eps, np.inf)
         rhos = tf.clip_by_value(tf.tanh(rhos), -1.0 + eps, 1.0 - eps)
-        es = tf.clip_by_value(tf.nn.sigmoid(es)*(1 + self.bias), eps, 1.0 - eps)
+        es = tf.clip_by_value(tf.nn.sigmoid(es), eps, 1.0 - eps)
+        es = tf.where(es < .01, tf.zeros_like(es), es)
 
         return pis, mus, sigmas, rhos, es

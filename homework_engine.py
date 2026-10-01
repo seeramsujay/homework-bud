@@ -66,6 +66,8 @@ class HomeworkEngine:
                     cleaned_para += "'"
                 elif ch in ['–', '—']:
                     cleaned_para += '-'
+                elif ch in ['Q', 'X', 'Z']:
+                    cleaned_para += ch.lower()
                 else:
                     cleaned_para += ' '
 
