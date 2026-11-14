@@ -1,9 +1,11 @@
 import copy
 
 import numpy as np
+
 try:
     from sklearn.model_selection import train_test_split
 except ImportError:
+
     def train_test_split(indices, train_size=0.8, random_state=None, stratify=None):
         if random_state is not None:
             rng = np.random.RandomState(random_state)
@@ -18,8 +20,7 @@ except ImportError:
         return shuffled[:split_point], shuffled[split_point:]
 
 
-class DataFrame(object):
-
+class DataFrame:
     """Minimal pd.DataFrame analog for handling n-dimensional numpy matrices with additional
     support for shuffling, batching, and train/test splitting.
 
@@ -32,10 +33,12 @@ class DataFrame(object):
     """
 
     def __init__(self, columns, data):
-        assert len(columns) == len(data), 'columns length does not match data length'
+        assert len(columns) == len(data), "columns length does not match data length"
 
         lengths = [mat.shape[0] for mat in data]
-        assert len(set(lengths)) == 1, 'all matrices in data must have same first dimension'
+        assert (
+            len(set(lengths)) == 1
+        ), "all matrices in data must have same first dimension"
 
         self.length = lengths[0]
         self.columns = columns
@@ -52,30 +55,42 @@ class DataFrame(object):
     def shuffle(self):
         np.random.shuffle(self.idx)
 
-    def train_test_split(self, train_size, random_state=np.random.randint(1000), stratify=None):
+    def train_test_split(
+        self, train_size, random_state=np.random.randint(1000), stratify=None
+    ):
         train_idx, test_idx = train_test_split(
             self.idx,
             train_size=train_size,
             random_state=random_state,
-            stratify=stratify
+            stratify=stratify,
         )
-        train_df = DataFrame(copy.copy(self.columns), [mat[train_idx] for mat in self.data])
-        test_df = DataFrame(copy.copy(self.columns), [mat[test_idx] for mat in self.data])
+        train_df = DataFrame(
+            copy.copy(self.columns), [mat[train_idx] for mat in self.data]
+        )
+        test_df = DataFrame(
+            copy.copy(self.columns), [mat[test_idx] for mat in self.data]
+        )
         return train_df, test_df
 
-    def batch_generator(self, batch_size, shuffle=True, num_epochs=10000, allow_smaller_final_batch=False):
+    def batch_generator(
+        self,
+        batch_size,
+        shuffle=True,
+        num_epochs=10000,
+        allow_smaller_final_batch=False,
+    ):
         epoch_num = 0
         while epoch_num < num_epochs:
             if shuffle:
                 self.shuffle()
 
             for i in range(0, self.length + 1, batch_size):
-                batch_idx = self.idx[i: i + batch_size]
+                batch_idx = self.idx[i : i + batch_size]
                 if not allow_smaller_final_batch and len(batch_idx) != batch_size:
                     break
                 yield DataFrame(
                     columns=copy.copy(self.columns),
-                    data=[mat[batch_idx].copy() for mat in self.data]
+                    data=[mat[batch_idx].copy() for mat in self.data],
                 )
 
             epoch_num += 1
@@ -107,10 +122,12 @@ class DataFrame(object):
             return self.dict[key]
 
         elif isinstance(key, int):
-            return pd.Series(dict(zip(self.columns, [mat[self.idx[key]] for mat in self.data])))
+            return pd.Series(
+                dict(zip(self.columns, [mat[self.idx[key]] for mat in self.data]))
+            )
 
     def __setitem__(self, key, value):
-        assert value.shape[0] == len(self), 'matrix first dimension does not match'
+        assert value.shape[0] == len(self), "matrix first dimension does not match"
         if key not in self.columns:
             self.columns.append(key)
             self.data.append(value)

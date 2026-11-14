@@ -9,14 +9,14 @@ Usage:
     kaggle datasets version -p kaggle/dataset/bundle -m "Update dataset" --dir-mode zip
 """
 
-import os
-import sys
-import shutil
 import argparse
+import os
+import shutil
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 BUNDLE_DIR = os.path.join(SCRIPT_DIR, "bundle")
+
 
 def stage_dataset(use_symlinks: bool = False):
     print(f"[INFO] Staging dataset bundle at: {BUNDLE_DIR}")
@@ -33,13 +33,17 @@ def stage_dataset(use_symlinks: bool = False):
     # 2. Blank ruled page
     blank_src = os.path.join(REPO_ROOT, "Blank_Page.jpeg")
     if os.path.exists(blank_src):
-        _link_or_copy(blank_src, os.path.join(BUNDLE_DIR, "Blank_Page.jpeg"), use_symlinks)
+        _link_or_copy(
+            blank_src, os.path.join(BUNDLE_DIR, "Blank_Page.jpeg"), use_symlinks
+        )
         print("  ✓ Staged Blank_Page.jpeg")
 
     # 3. Transcriptions
     csv_src = os.path.join(REPO_ROOT, "lines_transcription.csv")
     if os.path.exists(csv_src):
-        _link_or_copy(csv_src, os.path.join(BUNDLE_DIR, "lines_transcription.csv"), use_symlinks)
+        _link_or_copy(
+            csv_src, os.path.join(BUNDLE_DIR, "lines_transcription.csv"), use_symlinks
+        )
         print("  ✓ Staged lines_transcription.csv")
 
     # 4. Checkpoints
@@ -64,8 +68,11 @@ def stage_dataset(use_symlinks: bool = False):
         print("  ✓ Staged Training_Images/")
 
     print("\n[OK] Dataset bundle staged successfully!")
-    print(f"To upload or update dataset on Kaggle, run:")
-    print(f"  kaggle datasets version -p {os.path.relpath(BUNDLE_DIR, REPO_ROOT)} -m \"Update dataset\" --dir-mode zip")
+    print("To upload or update dataset on Kaggle, run:")
+    print(
+        f'  kaggle datasets version -p {os.path.relpath(BUNDLE_DIR, REPO_ROOT)} -m "Update dataset" --dir-mode zip'
+    )
+
 
 def _link_or_copy(src, dst, use_symlink):
     if use_symlink:
@@ -73,14 +80,18 @@ def _link_or_copy(src, dst, use_symlink):
     else:
         shutil.copy2(src, dst)
 
+
 def _copy_tree(src, dst, use_symlink):
     if use_symlink:
         os.symlink(src, dst)
     else:
         shutil.copytree(src, dst)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stage Kaggle dataset bundle")
-    parser.add_argument("--symlink", action="store_true", help="Use symlinks instead of copying")
+    parser.add_argument(
+        "--symlink", action="store_true", help="Use symlinks instead of copying"
+    )
     args = parser.parse_args()
     stage_dataset(use_symlinks=args.symlink)

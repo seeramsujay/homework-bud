@@ -4,12 +4,12 @@ Extracts stroke sequences (x, -y, eos) from photos of handwritten paper pages
 and formats them for Graves RNN style conditioning.
 """
 
-import os
 import json
+import os
+
 import cv2
-import numpy as np
-from typing import Tuple, List, Optional
 import drawing
+import numpy as np
 
 
 def skeletonize(img_bin: np.ndarray) -> np.ndarray:
@@ -37,14 +37,18 @@ def skeletonize(img_bin: np.ndarray) -> np.ndarray:
     return skel
 
 
-def trace_skeleton_strokes(skel: np.ndarray) -> List[np.ndarray]:
+def trace_skeleton_strokes(skel: np.ndarray) -> list[np.ndarray]:
     """
     Traces skeleton connected components into ordered (x, y) stroke paths
     ordered generally from left to right.
     """
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(skel, connectivity=8)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        skel, connectivity=8
+    )
     # Sort components by their leftmost x coordinate (reading order)
-    comp_indices = sorted(range(1, num_labels), key=lambda i: stats[i, cv2.CC_STAT_LEFT])
+    comp_indices = sorted(
+        range(1, num_labels), key=lambda i: stats[i, cv2.CC_STAT_LEFT]
+    )
 
     strokes = []
     for idx in comp_indices:
@@ -79,10 +83,8 @@ def trace_skeleton_strokes(skel: np.ndarray) -> List[np.ndarray]:
 
 
 def process_paper_sample(
-    image_path: str,
-    transcription_text: str,
-    output_prefix: str = "styles/style-custom"
-) -> Tuple[np.ndarray, np.ndarray]:
+    image_path: str, transcription_text: str, output_prefix: str = "styles/style-custom"
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Extracts strokes from a paper photo and exports style .npy files for demo.py.
     """
@@ -95,8 +97,7 @@ def process_paper_sample(
     # Adaptive thresholding to extract pen strokes from paper
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     binary = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV, 21, 10
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 10
     )
 
     # Thin to 1-pixel skeleton
@@ -120,39 +121,40 @@ def process_paper_sample(
     coords = drawing.align(coords)
     coords = drawing.denoise(coords)
     offsets = drawing.coords_to_offsets(coords)
-    offsets = offsets[:drawing.MAX_STROKE_LEN]
+    offsets = offsets[: drawing.MAX_STROKE_LEN]
     offsets = drawing.normalize(offsets)
 
     # Prepare characters
     clean_chars = transcription_text.strip()
-    encoded_chars = drawing.encode_ascii(clean_chars)[:drawing.MAX_CHAR_LEN]
+    encoded_chars = drawing.encode_ascii(clean_chars)[: drawing.MAX_CHAR_LEN]
 
     os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
     np.save(f"{output_prefix}-strokes.npy", offsets)
     np.save(f"{output_prefix}-chars.npy", np.array(clean_chars))
 
     print(f"[OK] Extracted {len(offsets)} stroke points from {image_path}")
-    print(f"[OK] Saved style to {output_prefix}-strokes.npy and {output_prefix}-chars.npy")
+    print(
+        f"[OK] Saved style to {output_prefix}-strokes.npy and {output_prefix}-chars.npy"
+    )
     return offsets, np.array(clean_chars)
 
 
 def process_json_style(
-    json_path: str,
-    output_prefix: str = "styles/style-custom"
-) -> Tuple[np.ndarray, np.ndarray]:
+    json_path: str, output_prefix: str = "styles/style-custom"
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Converts style exported from touch_recorder.html into model style files.
     """
-    with open(json_path, 'r') as f:
+    with open(json_path, "r") as f:
         data = json.load(f)
 
-    text = data['text']
-    coords = np.array(data['coords'], dtype=np.float32)
+    text = data["text"]
+    coords = np.array(data["coords"], dtype=np.float32)
 
     coords = drawing.align(coords)
     coords = drawing.denoise(coords)
     offsets = drawing.coords_to_offsets(coords)
-    offsets = offsets[:drawing.MAX_STROKE_LEN]
+    offsets = offsets[: drawing.MAX_STROKE_LEN]
     offsets = drawing.normalize(offsets)
 
     os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
@@ -160,18 +162,21 @@ def process_json_style(
     np.save(f"{output_prefix}-chars.npy", np.array(text))
 
     print(f"[OK] Converted {len(offsets)} touch points from {json_path}")
-    print(f"[OK] Saved style to {output_prefix}-strokes.npy and {output_prefix}-chars.npy")
+    print(
+        f"[OK] Saved style to {output_prefix}-strokes.npy and {output_prefix}-chars.npy"
+    )
     return offsets, np.array(text)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 3:
         print("Usage:")
         print("  python paper_stroke_extractor.py <image_path> <transcription_text>")
         print("  python paper_stroke_extractor.py --json <touch_style.json>")
     else:
-        if sys.argv[1] == '--json':
+        if sys.argv[1] == "--json":
             process_json_style(sys.argv[2])
         else:
             process_paper_sample(sys.argv[1], sys.argv[2])

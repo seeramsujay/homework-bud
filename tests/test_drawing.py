@@ -1,6 +1,8 @@
 import unittest
+
 import numpy as np
-from drawing import alphabet, alpha_to_num, num_to_alpha, skew, stretch, align
+from drawing import align, alpha_to_num, alphabet, num_to_alpha, skew, stretch
+
 
 class TestDrawing(unittest.TestCase):
     def test_alphabet_mapping(self):
@@ -25,6 +27,7 @@ class TestDrawing(unittest.TestCase):
         coords = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [2.0, 2.0, 1.0]])
         aligned = align(coords)
         self.assertEqual(aligned.shape, coords.shape)
+
 
 if __name__ == "__main__":
     unittest.main()
