@@ -7,26 +7,39 @@ import json
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUTPUT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "kernels", "essay_generator", "homework_generator_kaggle.ipynb"))
+DEFAULT_OUTPUT = os.path.abspath(
+    os.path.join(
+        SCRIPT_DIR,
+        "..",
+        "kernels",
+        "essay_generator",
+        "homework_generator_kaggle.ipynb",
+    )
+)
+
 
 def create_generator_notebook(output_path=DEFAULT_OUTPUT):
     cells = []
 
     def add_md(source):
-        cells.append({
-            "cell_type": "markdown",
-            "metadata": {},
-            "source": [line + "\n" for line in source.strip().split("\n")]
-        })
+        cells.append(
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [line + "\n" for line in source.strip().split("\n")],
+            }
+        )
 
     def add_code(source):
-        cells.append({
-            "cell_type": "code",
-            "execution_count": None,
-            "metadata": {},
-            "outputs": [],
-            "source": [line + "\n" for line in source.strip().split("\n")]
-        })
+        cells.append(
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": [line + "\n" for line in source.strip().split("\n")],
+            }
+        )
 
     # Header
     add_md("""
@@ -247,21 +260,19 @@ print("You can download homework_submission.zip from the right panel under 'Outp
             "kernelspec": {
                 "display_name": "Python 3",
                 "language": "python",
-                "name": "python3"
+                "name": "python3",
             },
-            "language_info": {
-                "name": "python",
-                "version": "3.10"
-            }
+            "language_info": {"name": "python", "version": "3.10"},
         },
         "nbformat": 4,
-        "nbformat_minor": 4
+        "nbformat_minor": 4,
     }
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(notebook_data, f, indent=2)
     print(f"[OK] Successfully built {output_path}!")
+
 
 if __name__ == "__main__":
     create_generator_notebook()

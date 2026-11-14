@@ -3,22 +3,22 @@ Ruled Sheet Line & Margin Detector for Homework-Bud
 Detects ruled notebook lines, margins, and page tilt from phone camera photos.
 """
 
+from dataclasses import dataclass
+
 import cv2
 import numpy as np
-from dataclasses import dataclass
-from typing import List, Tuple, Optional
 
 
 @dataclass
 class PageLayout:
     width: int
     height: int
-    baselines: List[float]       # Y-coordinates of ruled lines across page
-    line_spacing: float          # Average spacing between lines in pixels
-    left_margin: float           # X-coordinate where text starts
-    right_margin: float          # X-coordinate where text ends
-    tilt_angle_deg: float        # Rotation angle of ruled lines in degrees
-    has_detected_lines: bool     # True if real ruled lines were found
+    baselines: list[float]  # Y-coordinates of ruled lines across page
+    line_spacing: float  # Average spacing between lines in pixels
+    left_margin: float  # X-coordinate where text starts
+    right_margin: float  # X-coordinate where text ends
+    tilt_angle_deg: float  # Rotation angle of ruled lines in degrees
+    has_detected_lines: bool  # True if real ruled lines were found
 
 
 class RuledSheetDetector:
@@ -47,14 +47,23 @@ class RuledSheetDetector:
         # Fallback if no lines found (e.g. unruled paper photo)
         if len(baselines) < 3:
             default_spacing = h / 28.0  # standard ~28 lines per sheet
-            baselines = [float(y) for y in np.arange(h * 0.12, h * 0.92, default_spacing)]
+            baselines = [
+                float(y) for y in np.arange(h * 0.12, h * 0.92, default_spacing)
+            ]
             line_spacing = default_spacing
             has_detected_lines = False
             angle = 0.0
         else:
             diffs = np.diff(baselines)
-            valid_diffs = diffs[(diffs >= self.min_line_spacing) & (diffs <= np.percentile(diffs, 90) * 1.5)]
-            line_spacing = float(np.median(valid_diffs)) if len(valid_diffs) > 0 else float(np.median(diffs))
+            valid_diffs = diffs[
+                (diffs >= self.min_line_spacing)
+                & (diffs <= np.percentile(diffs, 90) * 1.5)
+            ]
+            line_spacing = (
+                float(np.median(valid_diffs))
+                if len(valid_diffs) > 0
+                else float(np.median(diffs))
+            )
             has_detected_lines = True
 
         return PageLayout(
@@ -65,10 +74,10 @@ class RuledSheetDetector:
             left_margin=left_margin,
             right_margin=right_margin,
             tilt_angle_deg=angle,
-            has_detected_lines=has_detected_lines
+            has_detected_lines=has_detected_lines,
         )
 
-    def _detect_horizontal_lines(self, gray: np.ndarray) -> Tuple[List[float], float]:
+    def _detect_horizontal_lines(self, gray: np.ndarray) -> tuple[list[float], float]:
         h, w = gray.shape
 
         # Blur to reduce paper texture / grain
@@ -76,21 +85,26 @@ class RuledSheetDetector:
 
         # Adaptive thresholding to pick up faint blue/grey notebook lines
         binary = cv2.adaptiveThreshold(
-            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV, 25, 9
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 9
         )
 
         # Horizontal morphological kernel
         kernel_len = max(20, int(w * 0.06))
         horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_len, 1))
-        horizontal_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+        horizontal_lines = cv2.morphologyEx(
+            binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2
+        )
 
         # Detect lines using Probabilistic Hough Transform
         min_line_length = int(w * 0.25)
         max_line_gap = int(w * 0.05)
         lines = cv2.HoughLinesP(
-            horizontal_lines, 1, np.pi / 180,
-            threshold=50, minLineLength=min_line_length, maxLineGap=max_line_gap
+            horizontal_lines,
+            1,
+            np.pi / 180,
+            threshold=50,
+            minLineLength=min_line_length,
+            maxLineGap=max_line_gap,
         )
 
         if lines is None or len(lines) == 0:
@@ -160,8 +174,12 @@ class RuledSheetDetector:
 
         # 2. Try vertical morphological opening on grayscale
         binary = cv2.adaptiveThreshold(
-            gray[:, :left_bound], 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV, 25, 9
+            gray[:, :left_bound],
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            25,
+            9,
         )
         vert = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel)
         col_sums_bw = np.sum(vert, axis=0)

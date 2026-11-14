@@ -2,17 +2,17 @@
 Extracts training style strokes and character text from user handwritten notebook photos.
 """
 
-import os
 import glob
+import os
+
 import cv2
-import numpy as np
 import drawing
+import numpy as np
 from paper_stroke_extractor import skeletonize, trace_skeleton_strokes
 
 
 def extract_user_style_from_page(
-    image_path: str,
-    output_prefix: str = "styles/style-user"
+    image_path: str, output_prefix: str = "styles/style-user"
 ):
     """
     Extracts stroke sequence from the clearest writing line on the page to prime the RNN.
@@ -25,7 +25,12 @@ def extract_user_style_from_page(
 
     # Mask royal blue ink specifically
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    blue_mask = (hsv[:, :, 0] >= 90) & (hsv[:, :, 0] <= 138) & (hsv[:, :, 1] >= 45) & (hsv[:, :, 2] <= 215)
+    blue_mask = (
+        (hsv[:, :, 0] >= 90)
+        & (hsv[:, :, 0] <= 138)
+        & (hsv[:, :, 1] >= 45)
+        & (hsv[:, :, 2] <= 215)
+    )
     ink_bin = (blue_mask * 255).astype(np.uint8)
 
     # Clean isolated noise pixels
@@ -36,11 +41,15 @@ def extract_user_style_from_page(
     # Sum ink across horizontal rows
     row_sums = np.sum(ink_bin, axis=1)
     # Smooth row sums
-    smoothed = np.convolve(row_sums, np.ones(25) / 25.0, mode='same')
+    smoothed = np.convolve(row_sums, np.ones(25) / 25.0, mode="same")
     peaks = []
     min_dist = 35
     for i in range(1, len(smoothed) - 1):
-        if smoothed[i] > smoothed[i - 1] and smoothed[i] > smoothed[i + 1] and smoothed[i] > 255 * 10:
+        if (
+            smoothed[i] > smoothed[i - 1]
+            and smoothed[i] > smoothed[i + 1]
+            and smoothed[i] > 255 * 10
+        ):
             if not peaks or (i - peaks[-1]) >= min_dist:
                 peaks.append(i)
 
@@ -53,7 +62,7 @@ def extract_user_style_from_page(
         y_start = max(0, best_peak - 25)
         y_end = min(h, best_peak + 25)
 
-    line_crop = ink_bin[y_start:y_end, int(w * 0.08):int(w * 0.92)]
+    line_crop = ink_bin[y_start:y_end, int(w * 0.08) : int(w * 0.92)]
 
     # Skeletonize
     skel = skeletonize(line_crop)
@@ -72,19 +81,21 @@ def extract_user_style_from_page(
     coords = drawing.align(coords)
     coords = drawing.denoise(coords)
     offsets = drawing.coords_to_offsets(coords)
-    offsets = offsets[:drawing.MAX_STROKE_LEN]
+    offsets = offsets[: drawing.MAX_STROKE_LEN]
     offsets = drawing.normalize(offsets)
 
     os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
     np.save(f"{output_prefix}-strokes.npy", offsets)
     np.save(f"{output_prefix}-chars.npy", np.array("sample handwriting"))
 
-    print(f"[OK] Extracted {len(offsets)} stroke points from {os.path.basename(image_path)}")
+    print(
+        f"[OK] Extracted {len(offsets)} stroke points from {os.path.basename(image_path)}"
+    )
     print(f"[OK] Saved custom style to {output_prefix}-strokes.npy")
     return offsets
 
 
-if __name__ == '__main__':
-    train_files = sorted(glob.glob('Training_Images/*.jpeg'))
+if __name__ == "__main__":
+    train_files = sorted(glob.glob("Training_Images/*.jpeg"))
     if train_files:
-        extract_user_style_from_page(train_files[0], output_prefix='styles/style-user')
+        extract_user_style_from_page(train_files[0], output_prefix="styles/style-user")

@@ -6,15 +6,16 @@ Master builder script to build all 3 Kaggle notebooks:
 3. Original RNN Style 6 Generator: kaggle/kernels/style6_generator/homework_original_style_generator.ipynb
 """
 
-import sys
 import os
+import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from build_kaggle_notebook import create_notebook as build_finetune
 from build_generator_notebook import create_generator_notebook as build_generator
+from build_kaggle_notebook import create_notebook as build_finetune
 from build_original_style_notebook import create_original_style_notebook as build_style6
+
 
 def build_all():
     print("=" * 60)
@@ -33,6 +34,7 @@ def build_all():
     print("\n" + "=" * 60)
     print("[SUCCESS] All Kaggle notebooks generated successfully!")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     build_all()
