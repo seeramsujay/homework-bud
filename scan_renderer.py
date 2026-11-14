@@ -4,21 +4,25 @@ Overlays synthesized handwriting onto blank ruled notebook photos with physical 
 """
 
 import os
+
 import cv2
+import drawing
 import numpy as np
 from PIL import Image
-from typing import List, Tuple, Optional
 from ruled_sheet_detector import PageLayout, RuledSheetDetector
-import drawing
 
 
 class ScanRenderer:
     def __init__(
         self,
-        ink_rgb: Tuple[int, int, int] = (48, 87, 163),   # Royal Blue extracted from pen sample (#3057a3)
-        ink_bleed: float = 0.3,                          # Microscopic bleed
-        human_jitter: float = 0.6,                       # Subtle human baseline jitter
-        high_contrast: bool = True                       # High contrast scanner style
+        ink_rgb: tuple[int, int, int] = (
+            48,
+            87,
+            163,
+        ),  # Royal Blue extracted from pen sample (#3057a3)
+        ink_bleed: float = 0.3,  # Microscopic bleed
+        human_jitter: float = 0.6,  # Subtle human baseline jitter
+        high_contrast: bool = True,  # High contrast scanner style
     ):
         self.ink_rgb = ink_rgb
         self.ink_bleed = ink_bleed
@@ -26,7 +30,7 @@ class ScanRenderer:
         self.high_contrast = high_contrast
 
     @classmethod
-    def sample_ink_from_image(cls, crop_image_path: str) -> Tuple[int, int, int]:
+    def sample_ink_from_image(cls, crop_image_path: str) -> tuple[int, int, int]:
         """
         Samples the median royal blue ink color from an uploaded handwritten sample photo.
         """
@@ -34,7 +38,12 @@ class ScanRenderer:
         if img is None:
             return (48, 87, 163)
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        blue_mask = (hsv[:, :, 0] >= 95) & (hsv[:, :, 0] <= 135) & (hsv[:, :, 1] >= 60) & (hsv[:, :, 2] <= 180)
+        blue_mask = (
+            (hsv[:, :, 0] >= 95)
+            & (hsv[:, :, 0] <= 135)
+            & (hsv[:, :, 1] >= 60)
+            & (hsv[:, :, 2] <= 180)
+        )
         blue_pixels = img[blue_mask]
         if len(blue_pixels) == 0:
             return (48, 87, 163)
@@ -44,9 +53,9 @@ class ScanRenderer:
     def render_page(
         self,
         blank_sheet_path: str,
-        lines_stroke_coords: List[np.ndarray],
-        layout: Optional[PageLayout] = None,
-        output_image_path: Optional[str] = None
+        lines_stroke_coords: list[np.ndarray],
+        layout: PageLayout | None = None,
+        output_image_path: str | None = None,
     ) -> np.ndarray:
         """
         Renders a page of handwritten strokes directly onto the blank paper photo.
@@ -99,13 +108,17 @@ class ScanRenderer:
             scaled_ys = (raw_ys - max_y) * scale + baseline_y + jitter_y
 
             if np.max(scaled_xs) > layout.right_margin:
-                overflow_scale = (layout.right_margin - layout.left_margin) / (orig_width * scale)
+                overflow_scale = (layout.right_margin - layout.left_margin) / (
+                    orig_width * scale
+                )
                 if overflow_scale < 1.0:
                     scale *= overflow_scale
                     scaled_xs = (raw_xs - min_x) * scale + layout.left_margin + jitter_x
                     scaled_ys = (raw_ys - max_y) * scale + baseline_y + jitter_y
 
-            self._draw_solid_ink_strokes(ink_layer, scaled_xs, scaled_ys, raw_eoses, scale)
+            self._draw_solid_ink_strokes(
+                ink_layer, scaled_xs, scaled_ys, raw_eoses, scale
+            )
 
         # Multiply-blend solid ink layer onto the paper photo
         blended_bgr = self._multiply_blend(bg_bgr, ink_layer)
@@ -115,7 +128,7 @@ class ScanRenderer:
             blended_bgr = self._apply_scan_contrast(blended_bgr)
 
         if output_image_path:
-            os.makedirs(os.path.dirname(output_image_path) or '.', exist_ok=True)
+            os.makedirs(os.path.dirname(output_image_path) or ".", exist_ok=True)
             cv2.imwrite(output_image_path, blended_bgr, [cv2.IMWRITE_JPEG_QUALITY, 96])
 
         return blended_bgr
@@ -126,7 +139,7 @@ class ScanRenderer:
         xs: np.ndarray,
         ys: np.ndarray,
         eoses: np.ndarray,
-        scale: float
+        scale: float,
     ):
         """
         Draws uniform, solid royal blue ink strokes without artificial fading.
@@ -141,21 +154,34 @@ class ScanRenderer:
 
         for i in range(len(eoses)):
             if eoses[i] == 1.0 or i == len(eoses) - 1:
-                stroke_segment = pts[stroke_start:i + 1]
+                stroke_segment = pts[stroke_start : i + 1]
                 stroke_start = i + 1
 
                 if len(stroke_segment) < 2:
                     continue
 
                 for p in range(len(stroke_segment) - 1):
-                    p1 = (int(round(stroke_segment[p][0])), int(round(stroke_segment[p][1])))
-                    p2 = (int(round(stroke_segment[p + 1][0])), int(round(stroke_segment[p + 1][1])))
+                    p1 = (
+                        int(round(stroke_segment[p][0])),
+                        int(round(stroke_segment[p][1])),
+                    )
+                    p2 = (
+                        int(round(stroke_segment[p + 1][0])),
+                        int(round(stroke_segment[p + 1][1])),
+                    )
 
                     if p1[0] < 0 or p1[0] >= w or p1[1] < 0 or p1[1] >= h:
                         continue
 
                     # Solid uniform ink opacity (255)
-                    cv2.line(ink_layer, p1, p2, (base_b, base_g, base_r, 255), thickness, cv2.LINE_AA)
+                    cv2.line(
+                        ink_layer,
+                        p1,
+                        p2,
+                        (base_b, base_g, base_r, 255),
+                        thickness,
+                        cv2.LINE_AA,
+                    )
 
     def _multiply_blend(self, bg_bgr: np.ndarray, ink_rgba: np.ndarray) -> np.ndarray:
         """
@@ -173,13 +199,17 @@ class ScanRenderer:
 
         return np.clip(result, 0, 255).astype(np.uint8)
 
-    def _apply_scan_contrast(self, img_bgr: np.ndarray, gamma: float = 1.35, contrast_alpha: float = 1.25) -> np.ndarray:
+    def _apply_scan_contrast(
+        self, img_bgr: np.ndarray, gamma: float = 1.35, contrast_alpha: float = 1.25
+    ) -> np.ndarray:
         """
         Elevates contrast and gamma to mimic phone document scanning apps (CamScanner/Adobe Scan).
         """
         # Gamma correction
         inv_gamma = 1.0 / gamma
-        table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+        table = np.array(
+            [((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]
+        ).astype("uint8")
         gamma_img = cv2.LUT(img_bgr, table)
 
         # High contrast linear scaling
@@ -187,7 +217,7 @@ class ScanRenderer:
         return contrast_img
 
     @classmethod
-    def compile_pdf(cls, image_paths: List[str], output_pdf_path: str):
+    def compile_pdf(cls, image_paths: list[str], output_pdf_path: str):
         """
         Compiles multiple rendered page images into a single multi-page PDF document.
         """
@@ -196,14 +226,16 @@ class ScanRenderer:
 
         pil_images = []
         for p in image_paths:
-            img = Image.open(p).convert('RGB')
+            img = Image.open(p).convert("RGB")
             pil_images.append(img)
 
-        os.makedirs(os.path.dirname(output_pdf_path) or '.', exist_ok=True)
+        os.makedirs(os.path.dirname(output_pdf_path) or ".", exist_ok=True)
         pil_images[0].save(
             output_pdf_path,
             save_all=True,
             append_images=pil_images[1:] if len(pil_images) > 1 else [],
-            quality=95
+            quality=95,
         )
-        print(f"[OK] Successfully compiled {len(image_paths)} pages to {output_pdf_path}")
+        print(
+            f"[OK] Successfully compiled {len(image_paths)} pages to {output_pdf_path}"
+        )

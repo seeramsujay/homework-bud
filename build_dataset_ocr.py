@@ -6,14 +6,13 @@ and build training pairs (x.npy, c.npy) for fine-tuning.
 Strictly configured for English alphabet and ASCII characters.
 """
 
-import os
 import glob
-import string
-import cv2
-import numpy as np
-import drawing
-from paper_stroke_extractor import skeletonize, trace_skeleton_strokes
+import os
 
+import cv2
+import drawing
+import numpy as np
+from paper_stroke_extractor import skeletonize, trace_skeleton_strokes
 
 # Standard English printable character set
 ENGLISH_CHARSET = set(drawing.alphabet)
@@ -26,17 +25,17 @@ def clean_english_text(raw_text: str) -> str:
     """
     # Replace non-standard unicode quotes/dashes
     text = (
-        raw_text.replace('“', '"')
-        .replace('”', '"')
-        .replace('‘', "'")
-        .replace('’', "'")
-        .replace('—', '-')
-        .replace('–', '-')
+        raw_text.replace("“", '"')
+        .replace("”", '"')
+        .replace("‘", "'")
+        .replace("’", "'")
+        .replace("—", "-")
+        .replace("–", "-")
     )
     # Strictly filter to English alphabet
-    cleaned = ''.join([ch for ch in text if ch in ENGLISH_CHARSET])
+    cleaned = "".join([ch for ch in text if ch in ENGLISH_CHARSET])
     # Collapse multiple spaces
-    cleaned = ' '.join(cleaned.split())
+    cleaned = " ".join(cleaned.split())
     return cleaned
 
 
@@ -49,8 +48,9 @@ class HandwritingDatasetBuilder:
         """Initializes EasyOCR neural recognizer strictly for English."""
         if self.reader is None:
             import easyocr
+
             print("[INFO] Initializing Neural OCR Reader on GPU (English only)...")
-            self.reader = easyocr.Reader(['en'], gpu=self.use_gpu)
+            self.reader = easyocr.Reader(["en"], gpu=self.use_gpu)
             print("[OK] English Neural OCR loaded.")
 
     def transcribe_page_lines(self, image_path: str):
@@ -86,19 +86,21 @@ class HandwritingDatasetBuilder:
             x2 = min(img.shape[1], x_max + w_pad)
 
             line_crop = img[y1:y2, x1:x2]
-            extracted_lines.append({
-                'crop': line_crop,
-                'bbox': (x1, y1, x2 - x1, y2 - y1),
-                'text': clean_text
-            })
+            extracted_lines.append(
+                {
+                    "crop": line_crop,
+                    "bbox": (x1, y1, x2 - x1, y2 - y1),
+                    "text": clean_text,
+                }
+            )
 
-        print(f"[OK] Neural OCR extracted {len(extracted_lines)} English lines from {os.path.basename(image_path)}")
+        print(
+            f"[OK] Neural OCR extracted {len(extracted_lines)} English lines from {os.path.basename(image_path)}"
+        )
         return extracted_lines
 
     def build_dataset_from_images(
-        self,
-        image_paths: list,
-        output_dir: str = "data/processed"
+        self, image_paths: list, output_dir: str = "data/processed"
     ):
         """
         Extracts stroke sequences and paired English OCR transcriptions from all training images,
@@ -112,15 +114,17 @@ class HandwritingDatasetBuilder:
             lines = self.transcribe_page_lines(img_path)
 
             for line_data in lines:
-                crop = line_data['crop']
-                clean_text = line_data['text']
+                crop = line_data["crop"]
+                clean_text = line_data["text"]
 
                 if len(clean_text) < 3:
                     continue
 
                 # Filter blue ink
                 hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-                blue_mask = (hsv[:, :, 0] >= 85) & (hsv[:, :, 0] <= 140) & (hsv[:, :, 1] >= 40)
+                blue_mask = (
+                    (hsv[:, :, 0] >= 85) & (hsv[:, :, 0] <= 140) & (hsv[:, :, 1] >= 40)
+                )
                 ink_bin = (blue_mask * 255).astype(np.uint8)
 
                 if cv2.countNonZero(ink_bin) < 50:
@@ -142,16 +146,20 @@ class HandwritingDatasetBuilder:
                 coords = drawing.align(coords)
                 coords = drawing.denoise(coords)
                 offsets = drawing.coords_to_offsets(coords)
-                offsets = offsets[:drawing.MAX_STROKE_LEN]
+                offsets = offsets[: drawing.MAX_STROKE_LEN]
                 offsets = drawing.normalize(offsets)
 
                 all_strokes.append(offsets)
-                all_transcriptions.append(clean_text[:drawing.MAX_CHAR_LEN])
+                all_transcriptions.append(clean_text[: drawing.MAX_CHAR_LEN])
 
         if not all_strokes:
-            raise ValueError("No valid English line pairs extracted. Check image quality.")
+            raise ValueError(
+                "No valid English line pairs extracted. Check image quality."
+            )
 
-        print(f"\n[DONE] Successfully processed {len(all_strokes)} English training pairs!")
+        print(
+            f"\n[DONE] Successfully processed {len(all_strokes)} English training pairs!"
+        )
 
         # Format arrays for Graves RNN
         num_samples = len(all_strokes)
@@ -161,25 +169,25 @@ class HandwritingDatasetBuilder:
         c_len = np.zeros([num_samples], dtype=np.int8)
 
         for i, (stroke, text) in enumerate(zip(all_strokes, all_transcriptions)):
-            x[i, :len(stroke), :] = stroke
+            x[i, : len(stroke), :] = stroke
             x_len[i] = len(stroke)
             encoded = drawing.encode_ascii(text)
-            c[i, :len(encoded)] = encoded
+            c[i, : len(encoded)] = encoded
             c_len[i] = len(encoded)
 
         os.makedirs(output_dir, exist_ok=True)
-        np.save(os.path.join(output_dir, 'x.npy'), x)
-        np.save(os.path.join(output_dir, 'x_len.npy'), x_len)
-        np.save(os.path.join(output_dir, 'c.npy'), c)
-        np.save(os.path.join(output_dir, 'c_len.npy'), c_len)
+        np.save(os.path.join(output_dir, "x.npy"), x)
+        np.save(os.path.join(output_dir, "x_len.npy"), x_len)
+        np.save(os.path.join(output_dir, "c.npy"), c)
+        np.save(os.path.join(output_dir, "c_len.npy"), c_len)
 
         print(f"[OK] Saved processed dataset to {output_dir}/")
         print(f"  x.npy: {x.shape}")
         print(f"  c.npy: {c.shape}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     builder = HandwritingDatasetBuilder(use_gpu=False)
-    images = sorted(glob.glob('Training_Images/*.jpeg'))
+    images = sorted(glob.glob("Training_Images/*.jpeg"))
     if images:
         builder.build_dataset_from_images(images)
